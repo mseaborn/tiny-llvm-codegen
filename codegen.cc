@@ -64,7 +64,7 @@ public:
       int stack_offset;
       if (slot == stackslots.end()) {
         llvm::Argument *arg = llvm::cast<llvm::Argument>(value);
-        stack_offset = 4 + arg->getArgNo() * 4;
+        stack_offset = frame_size + 4 + arg->getArgNo() * 4;
       } else {
         stack_offset = slot->second;
       }
@@ -91,6 +91,7 @@ public:
 
   // XXX: move somewhere better
   std::map<llvm::Value*,int> stackslots;
+  int frame_size;
 };
 
 enum {
@@ -122,11 +123,15 @@ int main() {
     for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
          inst != bb->end();
          ++inst) {
-      // XXX: using a "red zone"
-      offset -= 4;
       codebuf.stackslots[inst] = offset;
-      // offset += 4; // XXX: fixed size
+      offset += 4; // XXX: fixed size
     }
+    codebuf.frame_size = offset;
+    // Prolog:
+    // subl $frame_size, %esp
+    codebuf.put_byte(0x81);
+    codebuf.put_byte(0xec);
+    codebuf.put_uint32(codebuf.frame_size);
 
     for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
          inst != bb->end();
@@ -158,6 +163,11 @@ int main() {
                  = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
         codebuf.move_to_reg(REG_EAX, op->getReturnValue());
         printf("ret\n");
+        // Epilog:
+        // addl $frame_size, %esp
+        codebuf.put_byte(0x81);
+        codebuf.put_byte(0xc4);
+        codebuf.put_uint32(codebuf.frame_size);
         codebuf.put_ret();
       } else {
         assert(0);
