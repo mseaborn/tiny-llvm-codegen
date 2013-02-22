@@ -134,11 +134,24 @@ int main() {
       printf("-- inst\n");
       if (llvm::BinaryOperator *op =
               llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
-        codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
-        codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
-        char code[2] = { 0x01, 0xc1 }; // addl %eax, %ecx
-        printf("add\n");
-        codebuf.put_code(code, sizeof(code));
+        codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
+        codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
+        switch (op->getOpcode()) {
+          case llvm::Instruction::Add: {
+            printf("add\n");
+            char code[2] = { 0x01, 0xc1 }; // addl %eax, %ecx
+            codebuf.put_code(code, sizeof(code));
+            break;
+          }
+          case llvm::Instruction::Sub: {
+            printf("sub\n");
+            char code[2] = { 0x29, 0xc1 }; // subl %eax, %ecx
+            codebuf.put_code(code, sizeof(code));
+            break;
+          }
+          default:
+            assert(0);
+        }
         int stack_offset = codebuf.stackslots[inst];
         codebuf.spill(REG_ECX, stack_offset);
       } else if (llvm::ReturnInst *op
