@@ -63,3 +63,10 @@ define i32 @test_call(i32 (i32, i32)* %func, i32 %arg1, i32 %arg2) {
   %2 = add i32 %1, 1000
   ret i32 %2
 }
+
+define i32 @test_call2(i32 (i32, i32)* %func, i32 %arg1, i32 %arg2) {
+  %1 = call i32 %func(i32 %arg1, i32 %arg2)
+  ; We are checking that the args don't clobber %1.
+  %2 = call i32 %func(i32 0, i32 0)
+  ret i32 %1
+}

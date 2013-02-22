@@ -272,8 +272,21 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
     CodeBuf codebuf;
     // codebuf.put_byte(0xcc); // int3 debug
 
-    int offset = 0;
     int callees_args_size = 0;
+    for (llvm::Function::iterator bb = func->begin();
+         bb != func->end();
+         ++bb) {
+      for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
+           inst != bb->end();
+           ++inst) {
+        if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(inst)) {
+          callees_args_size =
+            std::max(callees_args_size, get_args_stack_size(call));
+        }
+      }
+    }
+
+    int offset = callees_args_size;
     for (llvm::Function::iterator bb = func->begin();
          bb != func->end();
          ++bb) {
@@ -282,13 +295,9 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
            ++inst) {
         codebuf.stackslots[inst] = offset;
         offset += 4; // XXX: fixed size
-        if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(inst)) {
-          callees_args_size =
-            std::max(callees_args_size, get_args_stack_size(call));
-        }
       }
     }
-    codebuf.frame_size = offset + callees_args_size;
+    codebuf.frame_size = offset;
     // Prolog:
     // subl $frame_size, %esp
     codebuf.put_byte(0x81);
@@ -390,6 +399,9 @@ int main() {
     int (*funcp)(int (*func)(int arg1, int arg2), int arg1, int arg2);
     funcp = (typeof(funcp))(funcs["test_call"]);
     ASSERT_EQ(funcp(sub_func, 50, 10), 1040);
+
+    funcp = (typeof(funcp))(funcs["test_call2"]);
+    ASSERT_EQ(funcp(sub_func, 50, 10), 40);
   }
 
   printf("OK\n");
