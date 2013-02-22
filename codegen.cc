@@ -60,7 +60,6 @@ public:
     if (llvm::ConstantInt *cval = llvm::dyn_cast<llvm::ConstantInt>(value)) {
       // XXX: truncates
       uint32_t val = cval->getLimitedValue();
-      printf("const %i\n", val);
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       put_uint32(val);
@@ -79,7 +78,6 @@ public:
         stack_offset = slot->second;
       }
       // movl stack_offset(%esp), %reg
-      printf("unspill 0x%x\n", stack_offset);
       put_byte(0x8b);
       put_byte(0x84 | (reg << 3));
       put_byte(0x24);
@@ -205,7 +203,6 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
   for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
        inst != bb->end();
        ++inst) {
-    printf("-- inst\n");
     codebuf.make_label(bb);
     if (llvm::BinaryOperator *op =
         llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
@@ -213,13 +210,11 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
       codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
       switch (op->getOpcode()) {
         case llvm::Instruction::Add: {
-          printf("add\n");
           char code[2] = { 0x01, 0xc1 }; // addl %eax, %ecx
           codebuf.put_code(code, sizeof(code));
           break;
         }
         case llvm::Instruction::Sub: {
-          printf("sub\n");
           char code[2] = { 0x29, 0xc1 }; // subl %eax, %ecx
           codebuf.put_code(code, sizeof(code));
           break;
@@ -246,14 +241,12 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
       }
       codebuf.spill(REG_EDX, inst);
     } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
-      printf("load\n");
       codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
       // movl (%eax), %eax
       codebuf.put_byte(0x8b);
       codebuf.put_byte(0x00);
       codebuf.spill(REG_EAX, inst);
     } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
-      printf("store\n");
       codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
       codebuf.move_to_reg(REG_ECX, op->getValueOperand());
       // movl %ecx, (%eax)
@@ -264,7 +257,6 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
                = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
       if (llvm::Value *result = op->getReturnValue())
         codebuf.move_to_reg(REG_EAX, result);
-      printf("ret\n");
       // Epilog:
       // addl $frame_size, %esp
       codebuf.put_byte(0x81);
@@ -328,9 +320,6 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
   for (llvm::Module::FunctionListType::iterator func = module->begin();
        func != module->end();
        ++func) {
-    printf("got func\n");
-    // codebuf.put_byte(0xcc); // int3 debug
-
     int callees_args_size = 0;
     for (llvm::Function::iterator bb = func->begin();
          bb != func->end();
