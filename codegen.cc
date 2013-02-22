@@ -77,7 +77,8 @@ public:
     }
   }
 
-  void spill(int reg, int stack_offset) {
+  void spill(int reg, llvm::Instruction *inst) {
+    int stack_offset = stackslots[inst];
     // movl %reg, stack_offset(%esp)
     put_byte(0x89);
     put_byte(0x84 | (reg << 3));
@@ -148,8 +149,13 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
           default:
             assert(0);
         }
-        int stack_offset = codebuf.stackslots[inst];
-        codebuf.spill(REG_ECX, stack_offset);
+        codebuf.spill(REG_ECX, inst);
+      } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
+        codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
+        // movl (%eax), %eax
+        codebuf.put_byte(0x8b);
+        codebuf.put_byte(0x00);
+        codebuf.spill(REG_EAX, inst);
       } else if (llvm::ReturnInst *op
                  = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
         codebuf.move_to_reg(REG_EAX, op->getReturnValue());
@@ -196,5 +202,12 @@ int main() {
   func = (typeof(func))(funcs["test_sub"]);
   assert(func(200) == 800);
 
+  int (*funcp)(int *ptr);
+  funcp = (typeof(funcp))(funcs["test_load_int32"]);
+  int value = 0x12345678;
+  int cell = value;
+  assert(funcp(&cell) == value);
+
+  printf("OK\n");
   return 0;
 }

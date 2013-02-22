@@ -10,3 +10,7 @@ int test_add(int arg) {
 int test_sub(int arg) {
   return 1000 - arg;
 }
+
+int test_load_int32(int *ptr) {
+  return *ptr;
+}
