@@ -151,14 +151,24 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
         }
         codebuf.spill(REG_ECX, inst);
       } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
+        printf("load\n");
         codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
         // movl (%eax), %eax
         codebuf.put_byte(0x8b);
         codebuf.put_byte(0x00);
         codebuf.spill(REG_EAX, inst);
+      } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
+        printf("store\n");
+        codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
+        codebuf.move_to_reg(REG_ECX, op->getValueOperand());
+        // movl %ecx, (%eax)
+        codebuf.put_byte(0x89);
+        codebuf.put_byte(0x08);
+        codebuf.spill(REG_EAX, inst);
       } else if (llvm::ReturnInst *op
                  = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
-        codebuf.move_to_reg(REG_EAX, op->getReturnValue());
+        if (llvm::Value *result = op->getReturnValue())
+          codebuf.move_to_reg(REG_EAX, result);
         printf("ret\n");
         // Epilog:
         // addl $frame_size, %esp
@@ -202,11 +212,22 @@ int main() {
   func = (typeof(func))(funcs["test_sub"]);
   assert(func(200) == 800);
 
-  int (*funcp)(int *ptr);
-  funcp = (typeof(funcp))(funcs["test_load_int32"]);
-  int value = 0x12345678;
-  int cell = value;
-  assert(funcp(&cell) == value);
+  {
+    int (*funcp)(int *ptr);
+    funcp = (typeof(funcp))(funcs["test_load_int32"]);
+    int value = 0x12345678;
+    int cell = value;
+    assert(funcp(&cell) == value);
+  }
+
+  {
+    void (*funcp)(int *ptr, int value);
+    funcp = (typeof(funcp))(funcs["test_store_int32"]);
+    int value = 0x12345678;
+    int cell = 0;
+    funcp(&cell, value);
+    assert(cell == value);
+  }
 
   printf("OK\n");
   return 0;

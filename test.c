@@ -14,3 +14,7 @@ int test_sub(int arg) {
 int test_load_int32(int *ptr) {
   return *ptr;
 }
+
+void test_store_int32(int *ptr, int value) {
+  *ptr = value;
+}
