@@ -12,6 +12,8 @@
 #include <llvm/Module.h>
 #include <llvm/Support/IRReader.h>
 
+#define TEMPL(string) string, (sizeof(string) - 1)
+
 class CodeBuf {
   char *buf_;
   char *current_;
@@ -198,10 +200,21 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
       codebuf.put_ret();
     } else if (llvm::BranchInst *op =
                llvm::dyn_cast<llvm::BranchInst>(inst)) {
-      assert(op->isUnconditional());
-      // jmp <label> (32-bit)
-      codebuf.put_byte(0xe9);
-      codebuf.direct_jump_offset32(op->getSuccessor(0));
+      // TODO: could implement fallthrough to next basic block
+      if (op->isConditional()) {
+        codebuf.move_to_reg(REG_EAX, op->getCondition());
+        codebuf.put_code(TEMPL("\x85\xc0")); // testl %eax, %eax
+        codebuf.put_code(TEMPL("\x0f\x85")); // jnz <label> (32-bit)
+        codebuf.direct_jump_offset32(op->getSuccessor(0));
+        // jmp <label> (32-bit)
+        codebuf.put_byte(0xe9);
+        codebuf.direct_jump_offset32(op->getSuccessor(1));
+      } else {
+        assert(op->isUnconditional());
+        // jmp <label> (32-bit)
+        codebuf.put_byte(0xe9);
+        codebuf.direct_jump_offset32(op->getSuccessor(0));
+      }
     } else {
       assert(!"Unknown instruction type");
     }
@@ -311,6 +324,10 @@ int main() {
 
   func = (typeof(func))(funcs["test_branch"]);
   ASSERT_EQ(func(0), 101);
+
+  func = (typeof(func))(funcs["test_conditional"]);
+  ASSERT_EQ(func(99), 123);
+  ASSERT_EQ(func(98), 456);
 
   printf("OK\n");
   return 0;

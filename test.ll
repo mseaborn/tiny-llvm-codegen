@@ -36,3 +36,12 @@ define i32 @test_branch(i32 %arg) {
 label:
   ret i32 101
 }
+
+define i32 @test_conditional(i32 %arg) nounwind readonly {
+  %1 = icmp eq i32 %arg, 99
+  br i1 %1, label %iftrue, label %iffalse
+iftrue:
+  ret i32 123
+iffalse:
+  ret i32 456
+}
