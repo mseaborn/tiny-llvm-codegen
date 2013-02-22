@@ -79,13 +79,16 @@ public:
     }
   }
 
-  void spill(int reg, llvm::Instruction *inst) {
-    int stack_offset = stackslots[inst];
+  void write_reg_to_stack_offset(int reg, int stack_offset) {
     // movl %reg, stack_offset(%esp)
     put_byte(0x89);
     put_byte(0x84 | (reg << 3));
     put_byte(0x24);
     put_uint32(stack_offset);
+  }
+
+  void spill(int reg, llvm::Instruction *inst) {
+    write_reg_to_stack_offset(reg, stackslots[inst]);
   }
 
   void put_ret() {
@@ -149,6 +152,11 @@ void unconditional_jump(llvm::BasicBlock *from_bb,
   // jmp <label> (32-bit)
   codebuf.put_byte(0xe9);
   codebuf.direct_jump_offset32(to_bb);
+}
+
+int get_args_stack_size(llvm::CallInst *call) {
+  // Assume args are all 32-bit
+  return call->getNumArgOperands() * 4;
 }
 
 void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
@@ -239,6 +247,17 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
       // Nothing to do: phi nodes are handled by branches.
       // XXX: Someone still needs to validate that phi nodes only
       // appear in the right places.
+    } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
+      // We have already reserved space on the stack to store our
+      // callee's argument.
+      for (unsigned i = 0; i < op->getNumArgOperands(); ++i) {
+        codebuf.move_to_reg(REG_EAX, op->getArgOperand(i));
+        // Assume args are all 32-bit
+        codebuf.write_reg_to_stack_offset(REG_EAX, i * 4);
+      }
+      codebuf.move_to_reg(REG_EAX, op->getCalledValue());
+      codebuf.put_code(TEMPL("\xff\xd0")); // call *%eax
+      codebuf.spill(REG_EAX, op);
     } else {
       assert(!"Unknown instruction type");
     }
@@ -254,6 +273,7 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
     // codebuf.put_byte(0xcc); // int3 debug
 
     int offset = 0;
+    int callees_args_size = 0;
     for (llvm::Function::iterator bb = func->begin();
          bb != func->end();
          ++bb) {
@@ -262,9 +282,13 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
            ++inst) {
         codebuf.stackslots[inst] = offset;
         offset += 4; // XXX: fixed size
+        if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(inst)) {
+          callees_args_size =
+            std::max(callees_args_size, get_args_stack_size(call));
+        }
       }
     }
-    codebuf.frame_size = offset;
+    codebuf.frame_size = offset + callees_args_size;
     // Prolog:
     // subl $frame_size, %esp
     codebuf.put_byte(0x81);
@@ -299,6 +323,11 @@ void my_assert(int val1, int val2, const char *expr1, const char *expr2,
     if (_val1 != _val2)                                                 \
       my_assert(_val1, _val2, #val1, #val2, __FILE__, __LINE__);        \
   } while (0);
+
+int sub_func(int x, int y) {
+  printf("sub_func(%i, %i) called\n", x, y);
+  return x - y;
+}
 
 int main() {
   llvm::SMDiagnostic err;
@@ -356,6 +385,12 @@ int main() {
   func = (typeof(func))(funcs["test_phi"]);
   ASSERT_EQ(func(99), 123);
   ASSERT_EQ(func(98), 456);
+
+  {
+    int (*funcp)(int (*func)(int arg1, int arg2), int arg1, int arg2);
+    funcp = (typeof(funcp))(funcs["test_call"]);
+    ASSERT_EQ(funcp(sub_func, 50, 10), 1040);
+  }
 
   printf("OK\n");
   return 0;
