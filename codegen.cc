@@ -289,6 +289,7 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
         // Assume args are all 32-bit
         codebuf.write_reg_to_stack_offset(REG_EAX, i * 4);
       }
+      // TODO: Optimise to output direct calls too
       codebuf.move_to_reg(REG_EAX, op->getCalledValue());
       codebuf.put_code(TEMPL("\xff\xd0")); // call *%eax
       codebuf.spill(REG_EAX, op);
@@ -364,6 +365,7 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
     fflush(stdout);
     dump_range_as_code(function_entry, codebuf.get_current_pos());
 
+    codebuf.globals[func] = (uintptr_t) function_entry;
     (*funcs)[func->getName()] = (uintptr_t) function_entry;
   }
 }
@@ -452,6 +454,12 @@ int main() {
 
     funcp = (typeof(funcp))(funcs["test_call2"]);
     ASSERT_EQ(funcp(sub_func, 50, 10), 40);
+  }
+
+  {
+    int (*funcp)(void);
+    funcp = (typeof(funcp))(funcs["test_direct_call"]);
+    ASSERT_EQ(funcp(), 123);
   }
 
   {
