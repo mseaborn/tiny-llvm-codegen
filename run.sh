@@ -8,6 +8,4 @@ g++ -m32 codegen.cc \
   -UNDEBUG \
   -Wall -o codegen
 
-clang -m32 -emit-llvm -O1 -c test.c -o test.ll
-
 ./codegen
