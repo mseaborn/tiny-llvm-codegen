@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <sys/mman.h>
 
+#include <map>
+
 #include <llvm/Constants.h>
 #include <llvm/InstrTypes.h>
 #include <llvm/Instructions.h>
@@ -26,6 +28,14 @@ public:
     return buf_;
   }
 
+  void dump() {
+    FILE *fp = fopen("tmp_data", "w");
+    assert(fp);
+    fwrite(buf_, 1, current_ - buf_, fp);
+    fclose(fp);
+    system("objdump -D -b binary -m i386 tmp_data");
+  }
+
   void put_code(const char *data, size_t size) {
     memcpy(current_, data, size);
     current_ += size;
@@ -45,19 +55,49 @@ public:
     if (llvm::ConstantInt *cval = llvm::dyn_cast<llvm::ConstantInt>(value)) {
       // XXX: truncates
       uint32_t val = cval->getLimitedValue();
+      printf("const %i\n", val);
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       put_uint32(val);
+    } else {
+      std::map<llvm::Value*,int>::iterator slot = stackslots.find(value);
+      int stack_offset;
+      if (slot == stackslots.end()) {
+        llvm::Argument *arg = llvm::cast<llvm::Argument>(value);
+        stack_offset = 4 + arg->getArgNo() * 4;
+      } else {
+        stack_offset = slot->second;
+      }
+      // movl stack_offset(%esp), %reg
+      printf("unspill 0x%x\n", stack_offset);
+      put_byte(0x8b);
+      put_byte(0x84 | (reg << 3));
+      put_byte(0x24);
+      put_uint32(stack_offset);
     }
+  }
+
+  void spill(int reg, int stack_offset) {
+    // movl %reg, stack_offset(%esp)
+    put_byte(0x89);
+    put_byte(0x84 | (reg << 3));
+    put_byte(0x24);
+    put_uint32(stack_offset);
   }
 
   void put_ret() {
     put_byte(0xc3);
   }
+
+  // XXX: move somewhere better
+  std::map<llvm::Value*,int> stackslots;
 };
 
 enum {
-  REG_EAX = 0
+  REG_EAX = 0,
+  REG_ECX,
+  REG_EDX,
+  REG_EBX,
 };
 
 int main() {
@@ -75,28 +115,48 @@ int main() {
        ++func) {
     printf("got func\n");
     CodeBuf codebuf;
+    // codebuf.put_byte(0xcc); // int3 debug
 
     llvm::BasicBlock *bb = &func->getEntryBlock();
+    int offset = 0;
     for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
          inst != bb->end();
          ++inst) {
+      // XXX: using a "red zone"
+      offset -= 4;
+      codebuf.stackslots[inst] = offset;
+      // offset += 4; // XXX: fixed size
+    }
+
+    for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
+         inst != bb->end();
+         ++inst) {
+      printf("-- inst\n");
       if (llvm::BinaryOperator *op =
               llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
-        printf("binop inst\n");
-        assert(0);
+        codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
+        codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
+        char code[2] = { 0x01, 0xc1 }; // addl %eax, %ecx
+        printf("add\n");
+        codebuf.put_code(code, sizeof(code));
+        int stack_offset = codebuf.stackslots[inst];
+        codebuf.spill(REG_ECX, stack_offset);
       } else if (llvm::ReturnInst *op
                  = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
         codebuf.move_to_reg(REG_EAX, op->getReturnValue());
+        printf("ret\n");
         codebuf.put_ret();
       } else {
         assert(0);
       }
-      printf("inst\n");
     }
 
-    int (*func)();
+    fflush(stdout);
+    codebuf.dump();
+
+    int (*func)(int arg);
     func = (typeof(func))(codebuf.get_start());
-    printf("func() -> %i\n", func());
+    printf("func() -> %i\n", func(200));
   }
   return 0;
 }
