@@ -109,7 +109,7 @@ public:
 
   void direct_jump_offset32(llvm::BasicBlock *dest) {
     put_uint32(0); // Placeholder
-    relocs.push_back(Reloc((uint32_t *) current_, dest));
+    jump_relocs.push_back(JumpReloc((uint32_t *) current_, dest));
   }
 
   void put_global_reloc(llvm::GlobalValue *dest) {
@@ -117,9 +117,9 @@ public:
     put_uint32(0); // Placeholder
   }
 
-  void apply_relocs() {
-    for (std::vector<Reloc>::iterator reloc = relocs.begin();
-         reloc != relocs.end();
+  void apply_jump_relocs() {
+    for (std::vector<JumpReloc>::iterator reloc = jump_relocs.begin();
+         reloc != jump_relocs.end();
          ++reloc) {
       assert(labels.count(reloc->second) == 1);
       uint32_t target = labels[reloc->second];
@@ -145,8 +145,8 @@ public:
   std::map<llvm::GlobalValue*,uint32_t> globals;
   int frame_size;
 
-  typedef std::pair<uint32_t*,llvm::BasicBlock*> Reloc;
-  std::vector<Reloc> relocs;
+  typedef std::pair<uint32_t*,llvm::BasicBlock*> JumpReloc;
+  std::vector<JumpReloc> jump_relocs;
 
   typedef std::pair<uint32_t*,llvm::GlobalValue*> GlobalReloc;
   std::vector<GlobalReloc> global_relocs;
@@ -370,7 +370,7 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
       translate_bb(bb, codebuf);
     }
 
-    codebuf.apply_relocs();
+    codebuf.apply_jump_relocs();
     codebuf.apply_global_relocs();
     fflush(stdout);
     dump_range_as_code(function_entry, codebuf.get_current_pos());
