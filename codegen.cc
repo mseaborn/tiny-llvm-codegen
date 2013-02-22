@@ -12,7 +12,18 @@
 #include <llvm/Module.h>
 #include <llvm/Support/IRReader.h>
 
+// In LLVM 3.2, this becomes <llvm/DataLayout.h>
+#include <llvm/Target/TargetData.h>
+
 #define TEMPL(string) string, (sizeof(string) - 1)
+
+void dump_range_as_code(char *start, char *end) {
+  FILE *fp = fopen("tmp_data", "w");
+  assert(fp);
+  fwrite(start, 1, end - start, fp);
+  fclose(fp);
+  system("objdump -D -b binary -m i386 tmp_data");
+}
 
 class CodeBuf {
   char *buf_;
@@ -26,16 +37,8 @@ public:
     current_ = buf_;
   }
 
-  char *get_start() {
-    return buf_;
-  }
-
-  void dump() {
-    FILE *fp = fopen("tmp_data", "w");
-    assert(fp);
-    fwrite(buf_, 1, current_ - buf_, fp);
-    fclose(fp);
-    system("objdump -D -b binary -m i386 tmp_data");
+  char *get_current_pos() {
+    return current_;
   }
 
   void put_code(const char *data, size_t size) {
@@ -61,6 +64,11 @@ public:
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       put_uint32(val);
+    } else if (llvm::GlobalValue *global =
+               llvm::dyn_cast<llvm::GlobalValue>(value)) {
+      // movl $INT32, %reg
+      put_byte(0xb8 | reg);
+      put_global_reloc(global);
     } else {
       std::map<llvm::Value*,int>::iterator slot = stackslots.find(value);
       int stack_offset;
@@ -104,6 +112,11 @@ public:
     relocs.push_back(Reloc((uint32_t *) current_, dest));
   }
 
+  void put_global_reloc(llvm::GlobalValue *dest) {
+    global_relocs.push_back(GlobalReloc((uint32_t *) current_, dest));
+    put_uint32(0); // Placeholder
+  }
+
   void apply_relocs() {
     for (std::vector<Reloc>::iterator reloc = relocs.begin();
          reloc != relocs.end();
@@ -115,13 +128,42 @@ public:
     }
   }
 
+  void apply_global_relocs() {
+    for (std::vector<GlobalReloc>::iterator reloc = global_relocs.begin();
+         reloc != global_relocs.end();
+         ++reloc) {
+      assert(globals.count(reloc->second) == 1);
+      uint32_t value = globals[reloc->second];
+      uint32_t *addr = reloc->first;
+      *addr = value;
+    }
+  }
+
   // XXX: move somewhere better
   std::map<llvm::Value*,int> stackslots;
   std::map<llvm::BasicBlock*,uint32_t> labels;
+  std::map<llvm::GlobalValue*,uint32_t> globals;
   int frame_size;
 
   typedef std::pair<uint32_t*,llvm::BasicBlock*> Reloc;
   std::vector<Reloc> relocs;
+
+  typedef std::pair<uint32_t*,llvm::GlobalValue*> GlobalReloc;
+  std::vector<GlobalReloc> global_relocs;
+};
+
+class DataSegment {
+  char *buf_;
+
+public:
+  DataSegment() {
+    buf_ = (char *) mmap(NULL, 0x1000, PROT_READ | PROT_WRITE,
+                         MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    assert(buf_ != MAP_FAILED);
+    current = buf_;
+  }
+
+  char *current;
 };
 
 enum {
@@ -265,11 +307,28 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
 }
 
 void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
+  CodeBuf codebuf;
+  DataSegment dataseg;
+
+  llvm::TargetData data_layout(module);
+  for (llvm::Module::GlobalListType::iterator global = module->global_begin();
+       global != module->global_end();
+       ++global) {
+    // TODO: handle alignments
+    if (llvm::Constant *init = global->getInitializer()) {
+      llvm::ConstantInt *val = llvm::cast<llvm::ConstantInt>(init);
+      // XXX: truncates
+      uint32_t ival = val->getLimitedValue();
+      *(uint32_t *) dataseg.current = ival;
+    }
+    codebuf.globals[global] = (uint32_t) dataseg.current;
+    dataseg.current += data_layout.getTypeAllocSize(global->getType());
+  }
+
   for (llvm::Module::FunctionListType::iterator func = module->begin();
        func != module->end();
        ++func) {
     printf("got func\n");
-    CodeBuf codebuf;
     // codebuf.put_byte(0xcc); // int3 debug
 
     int callees_args_size = 0;
@@ -297,6 +356,7 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
         offset += 4; // XXX: fixed size
       }
     }
+    char *function_entry = codebuf.get_current_pos();
     codebuf.frame_size = offset;
     // Prolog:
     // subl $frame_size, %esp
@@ -311,10 +371,11 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
     }
 
     codebuf.apply_relocs();
+    codebuf.apply_global_relocs();
     fflush(stdout);
-    codebuf.dump();
+    dump_range_as_code(function_entry, codebuf.get_current_pos());
 
-    (*funcs)[func->getName()] = (uintptr_t) codebuf.get_start();
+    (*funcs)[func->getName()] = (uintptr_t) function_entry;
   }
 }
 
@@ -402,6 +463,14 @@ int main() {
 
     funcp = (typeof(funcp))(funcs["test_call2"]);
     ASSERT_EQ(funcp(sub_func, 50, 10), 40);
+  }
+
+  {
+    int *(*funcp)(void);
+    funcp = (typeof(funcp))(funcs["get_global"]);
+    int *ptr = funcp();
+    assert(ptr);
+    ASSERT_EQ(*ptr, 124);
   }
 
   printf("OK\n");
