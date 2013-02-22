@@ -30,3 +30,9 @@ define i1 @test_compare(i32 %arg) nounwind readonly {
   %1 = icmp eq i32 %arg, 99
   ret i1 %1
 }
+
+define i32 @test_branch(i32 %arg) {
+  br label %label
+label:
+  ret i32 101
+}

@@ -90,9 +90,33 @@ public:
     put_byte(0xc3);
   }
 
+  void make_label(llvm::BasicBlock *bb) {
+    labels[bb] = (uint32_t) current_;
+  }
+
+  void direct_jump_offset32(llvm::BasicBlock *dest) {
+    put_uint32(0); // Placeholder
+    relocs.push_back(Reloc((uint32_t *) current_, dest));
+  }
+
+  void apply_relocs() {
+    for (std::vector<Reloc>::iterator reloc = relocs.begin();
+         reloc != relocs.end();
+         ++reloc) {
+      assert(labels.count(reloc->second) == 1);
+      uint32_t target = labels[reloc->second];
+      uint32_t *jump_loc = reloc->first;
+      jump_loc[-1] = target - (uint32_t) jump_loc;
+    }
+  }
+
   // XXX: move somewhere better
   std::map<llvm::Value*,int> stackslots;
+  std::map<llvm::BasicBlock*,uint32_t> labels;
   int frame_size;
+
+  typedef std::pair<uint32_t*,llvm::BasicBlock*> Reloc;
+  std::vector<Reloc> relocs;
 };
 
 enum {
@@ -107,6 +131,7 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
        inst != bb->end();
        ++inst) {
     printf("-- inst\n");
+    codebuf.make_label(bb);
     if (llvm::BinaryOperator *op =
         llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
       codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
@@ -171,6 +196,12 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
       codebuf.put_byte(0xc4);
       codebuf.put_uint32(codebuf.frame_size);
       codebuf.put_ret();
+    } else if (llvm::BranchInst *op =
+               llvm::dyn_cast<llvm::BranchInst>(inst)) {
+      assert(op->isUnconditional());
+      // jmp <label> (32-bit)
+      codebuf.put_byte(0xe9);
+      codebuf.direct_jump_offset32(op->getSuccessor(0));
     } else {
       assert(!"Unknown instruction type");
     }
@@ -185,13 +216,16 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
     CodeBuf codebuf;
     // codebuf.put_byte(0xcc); // int3 debug
 
-    llvm::BasicBlock *bb = &func->getEntryBlock();
     int offset = 0;
-    for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
-         inst != bb->end();
-         ++inst) {
-      codebuf.stackslots[inst] = offset;
-      offset += 4; // XXX: fixed size
+    for (llvm::Function::iterator bb = func->begin();
+         bb != func->end();
+         ++bb) {
+      for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
+           inst != bb->end();
+           ++inst) {
+        codebuf.stackslots[inst] = offset;
+        offset += 4; // XXX: fixed size
+      }
     }
     codebuf.frame_size = offset;
     // Prolog:
@@ -200,8 +234,13 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
     codebuf.put_byte(0xec);
     codebuf.put_uint32(codebuf.frame_size);
 
-    translate_bb(bb, codebuf);
+    for (llvm::Function::iterator bb = func->begin();
+         bb != func->end();
+         ++bb) {
+      translate_bb(bb, codebuf);
+    }
 
+    codebuf.apply_relocs();
     fflush(stdout);
     codebuf.dump();
 
@@ -269,6 +308,9 @@ int main() {
   ASSERT_EQ(func(99), 1);
   ASSERT_EQ(func(98), 0);
   ASSERT_EQ(func(100), 0);
+
+  func = (typeof(func))(funcs["test_branch"]);
+  ASSERT_EQ(func(0), 101);
 
   printf("OK\n");
   return 0;
