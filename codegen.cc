@@ -128,6 +128,29 @@ enum {
   REG_EBX,
 };
 
+void handle_phi_nodes(llvm::BasicBlock *from_bb,
+                      llvm::BasicBlock *to_bb,
+                      CodeBuf &codebuf) {
+  for (llvm::BasicBlock::InstListType::iterator inst = to_bb->begin();
+       inst != to_bb->end();
+       ++inst) {
+    llvm::PHINode *phi = llvm::dyn_cast<llvm::PHINode>(inst);
+    if (!phi)
+      break;
+    codebuf.move_to_reg(REG_EAX, phi->getIncomingValueForBlock(from_bb));
+    codebuf.spill(REG_EAX, phi);
+  }
+}
+
+void unconditional_jump(llvm::BasicBlock *from_bb,
+                        llvm::BasicBlock *to_bb,
+                        CodeBuf &codebuf) {
+  handle_phi_nodes(from_bb, to_bb, codebuf);
+  // jmp <label> (32-bit)
+  codebuf.put_byte(0xe9);
+  codebuf.direct_jump_offset32(to_bb);
+}
+
 void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
   for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
        inst != bb->end();
@@ -203,18 +226,19 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
       // TODO: could implement fallthrough to next basic block
       if (op->isConditional()) {
         codebuf.move_to_reg(REG_EAX, op->getCondition());
+        handle_phi_nodes(bb, op->getSuccessor(0), codebuf);
         codebuf.put_code(TEMPL("\x85\xc0")); // testl %eax, %eax
         codebuf.put_code(TEMPL("\x0f\x85")); // jnz <label> (32-bit)
         codebuf.direct_jump_offset32(op->getSuccessor(0));
-        // jmp <label> (32-bit)
-        codebuf.put_byte(0xe9);
-        codebuf.direct_jump_offset32(op->getSuccessor(1));
+        unconditional_jump(bb, op->getSuccessor(1), codebuf);
       } else {
         assert(op->isUnconditional());
-        // jmp <label> (32-bit)
-        codebuf.put_byte(0xe9);
-        codebuf.direct_jump_offset32(op->getSuccessor(0));
+        unconditional_jump(bb, op->getSuccessor(0), codebuf);
       }
+    } else if (llvm::PHINode *op = llvm::dyn_cast<llvm::PHINode>(inst)) {
+      // Nothing to do: phi nodes are handled by branches.
+      // XXX: Someone still needs to validate that phi nodes only
+      // appear in the right places.
     } else {
       assert(!"Unknown instruction type");
     }
@@ -326,6 +350,10 @@ int main() {
   ASSERT_EQ(func(0), 101);
 
   func = (typeof(func))(funcs["test_conditional"]);
+  ASSERT_EQ(func(99), 123);
+  ASSERT_EQ(func(98), 456);
+
+  func = (typeof(func))(funcs["test_phi"]);
   ASSERT_EQ(func(99), 123);
   ASSERT_EQ(func(98), 456);
 

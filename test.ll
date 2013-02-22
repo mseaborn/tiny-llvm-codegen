@@ -45,3 +45,15 @@ iftrue:
 iffalse:
   ret i32 456
 }
+
+define i32 @test_phi(i32 %arg) nounwind readonly {
+  %1 = icmp eq i32 %arg, 99
+  br i1 %1, label %iftrue, label %iffalse
+iftrue:
+  br label %return
+iffalse:
+  br label %return
+return:
+  %2 = phi i32 [ 123, %iftrue ], [ 456, %iffalse ]
+  ret i32 %2
+}
