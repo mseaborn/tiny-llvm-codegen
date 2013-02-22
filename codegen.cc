@@ -101,16 +101,7 @@ enum {
   REG_EBX,
 };
 
-int main() {
-  llvm::SMDiagnostic err;
-  llvm::LLVMContext &context = llvm::getGlobalContext();
-  const char *filename = "test.ll";
-  llvm::Module *module = llvm::ParseIRFile(filename, err, context);
-  if (!module) {
-    fprintf(stderr, "failed to read file: %s\n", filename);
-    return 1;
-  }
-
+void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
   for (llvm::Module::FunctionListType::iterator func = module->begin();
        func != module->end();
        ++func) {
@@ -177,9 +168,33 @@ int main() {
     fflush(stdout);
     codebuf.dump();
 
-    int (*func)(int arg);
-    func = (typeof(func))(codebuf.get_start());
-    printf("func() -> %i\n", func(200));
+    (*funcs)[func->getName()] = (uintptr_t) codebuf.get_start();
   }
+}
+
+int main() {
+  llvm::SMDiagnostic err;
+  llvm::LLVMContext &context = llvm::getGlobalContext();
+  const char *filename = "test.ll";
+  llvm::Module *module = llvm::ParseIRFile(filename, err, context);
+  if (!module) {
+    fprintf(stderr, "failed to read file: %s\n", filename);
+    return 1;
+  }
+
+  std::map<std::string,uintptr_t> funcs;
+  translate(module, &funcs);
+
+  int (*func)(int arg);
+
+  func = (typeof(func))(funcs["test_return"]);
+  assert(func(0) == 123);
+
+  func = (typeof(func))(funcs["test_add"]);
+  assert(func(99) == 199);
+
+  func = (typeof(func))(funcs["test_sub"]);
+  assert(func(200) == 800);
+
   return 0;
 }
