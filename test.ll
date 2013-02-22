@@ -25,3 +25,8 @@ define void @test_store_int32(i32* nocapture %ptr, i32 %value) nounwind {
   store i32 %value, i32* %ptr, align 4
   ret void
 }
+
+define i1 @test_compare(i32 %arg) nounwind readonly {
+  %1 = icmp eq i32 %arg, 99
+  ret i1 %1
+}

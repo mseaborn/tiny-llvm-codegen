@@ -147,9 +147,24 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
             break;
           }
           default:
-            assert(0);
+            assert(!"Unknown binary operator");
         }
         codebuf.spill(REG_ECX, inst);
+      } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
+        codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
+        codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
+        switch (op->getPredicate()) {
+          case llvm::CmpInst::ICMP_EQ:
+            codebuf.put_code("\x31\xd2", 2); // xor %edx, %edx
+            // cmp %eax, %ecx
+            codebuf.put_byte(0x39);
+            codebuf.put_byte(0xc1);
+            codebuf.put_code("\x0f\x94\xc2", 3); // sete %dl
+            break;
+          default:
+            assert(!"Unknown comparison");
+        }
+        codebuf.spill(REG_EDX, inst);
       } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
         printf("load\n");
         codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
@@ -177,7 +192,7 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
         codebuf.put_uint32(codebuf.frame_size);
         codebuf.put_ret();
       } else {
-        assert(0);
+        assert(!"Unknown instruction type");
       }
     }
 
@@ -187,6 +202,21 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
     (*funcs)[func->getName()] = (uintptr_t) codebuf.get_start();
   }
 }
+
+void my_assert(int val1, int val2, const char *expr1, const char *expr2,
+               const char *file, int line_number) {
+  fprintf(stderr, "%i != %i: %s != %s at %s:%i\n",
+          val1, val2, expr1, expr2, file, line_number);
+  abort();
+}
+
+#define ASSERT_EQ(val1, val2)                                           \
+  do {                                                                  \
+    int _val1 = (val1);                                                 \
+    int _val2 = (val2);                                                 \
+    if (_val1 != _val2)                                                 \
+      my_assert(_val1, _val2, #val1, #val2, __FILE__, __LINE__);        \
+  } while (0);
 
 int main() {
   llvm::SMDiagnostic err;
@@ -228,6 +258,11 @@ int main() {
     funcp(&cell, value);
     assert(cell == value);
   }
+
+  func = (typeof(func))(funcs["test_compare"]);
+  ASSERT_EQ(func(99), 1);
+  ASSERT_EQ(func(98), 0);
+  ASSERT_EQ(func(100), 0);
 
   printf("OK\n");
   return 0;
