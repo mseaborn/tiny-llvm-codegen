@@ -102,6 +102,81 @@ enum {
   REG_EBX,
 };
 
+void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
+  for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
+       inst != bb->end();
+       ++inst) {
+    printf("-- inst\n");
+    if (llvm::BinaryOperator *op =
+        llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
+      codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
+      codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
+      switch (op->getOpcode()) {
+        case llvm::Instruction::Add: {
+          printf("add\n");
+          char code[2] = { 0x01, 0xc1 }; // addl %eax, %ecx
+          codebuf.put_code(code, sizeof(code));
+          break;
+        }
+        case llvm::Instruction::Sub: {
+          printf("sub\n");
+          char code[2] = { 0x29, 0xc1 }; // subl %eax, %ecx
+          codebuf.put_code(code, sizeof(code));
+          break;
+        }
+        default:
+          assert(!"Unknown binary operator");
+      }
+      codebuf.spill(REG_ECX, inst);
+    } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
+      codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
+      codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
+      switch (op->getPredicate()) {
+        case llvm::CmpInst::ICMP_EQ:
+          // XXX: we zero-extend first here
+          codebuf.put_code("\x31\xd2", 2); // xor %edx, %edx
+          // cmp %eax, %ecx
+          codebuf.put_byte(0x39);
+          codebuf.put_byte(0xc1);
+          // XXX: could store directly in stack slot
+          codebuf.put_code("\x0f\x94\xc2", 3); // sete %dl
+          break;
+        default:
+          assert(!"Unknown comparison");
+      }
+      codebuf.spill(REG_EDX, inst);
+    } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
+      printf("load\n");
+      codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
+      // movl (%eax), %eax
+      codebuf.put_byte(0x8b);
+      codebuf.put_byte(0x00);
+      codebuf.spill(REG_EAX, inst);
+    } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
+      printf("store\n");
+      codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
+      codebuf.move_to_reg(REG_ECX, op->getValueOperand());
+      // movl %ecx, (%eax)
+      codebuf.put_byte(0x89);
+      codebuf.put_byte(0x08);
+      codebuf.spill(REG_EAX, inst);
+    } else if (llvm::ReturnInst *op
+               = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
+      if (llvm::Value *result = op->getReturnValue())
+        codebuf.move_to_reg(REG_EAX, result);
+      printf("ret\n");
+      // Epilog:
+      // addl $frame_size, %esp
+      codebuf.put_byte(0x81);
+      codebuf.put_byte(0xc4);
+      codebuf.put_uint32(codebuf.frame_size);
+      codebuf.put_ret();
+    } else {
+      assert(!"Unknown instruction type");
+    }
+  }
+}
+
 void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
   for (llvm::Module::FunctionListType::iterator func = module->begin();
        func != module->end();
@@ -125,76 +200,7 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
     codebuf.put_byte(0xec);
     codebuf.put_uint32(codebuf.frame_size);
 
-    for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
-         inst != bb->end();
-         ++inst) {
-      printf("-- inst\n");
-      if (llvm::BinaryOperator *op =
-              llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
-        codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
-        codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
-        switch (op->getOpcode()) {
-          case llvm::Instruction::Add: {
-            printf("add\n");
-            char code[2] = { 0x01, 0xc1 }; // addl %eax, %ecx
-            codebuf.put_code(code, sizeof(code));
-            break;
-          }
-          case llvm::Instruction::Sub: {
-            printf("sub\n");
-            char code[2] = { 0x29, 0xc1 }; // subl %eax, %ecx
-            codebuf.put_code(code, sizeof(code));
-            break;
-          }
-          default:
-            assert(!"Unknown binary operator");
-        }
-        codebuf.spill(REG_ECX, inst);
-      } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
-        codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
-        codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
-        switch (op->getPredicate()) {
-          case llvm::CmpInst::ICMP_EQ:
-            codebuf.put_code("\x31\xd2", 2); // xor %edx, %edx
-            // cmp %eax, %ecx
-            codebuf.put_byte(0x39);
-            codebuf.put_byte(0xc1);
-            codebuf.put_code("\x0f\x94\xc2", 3); // sete %dl
-            break;
-          default:
-            assert(!"Unknown comparison");
-        }
-        codebuf.spill(REG_EDX, inst);
-      } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
-        printf("load\n");
-        codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
-        // movl (%eax), %eax
-        codebuf.put_byte(0x8b);
-        codebuf.put_byte(0x00);
-        codebuf.spill(REG_EAX, inst);
-      } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
-        printf("store\n");
-        codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
-        codebuf.move_to_reg(REG_ECX, op->getValueOperand());
-        // movl %ecx, (%eax)
-        codebuf.put_byte(0x89);
-        codebuf.put_byte(0x08);
-        codebuf.spill(REG_EAX, inst);
-      } else if (llvm::ReturnInst *op
-                 = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
-        if (llvm::Value *result = op->getReturnValue())
-          codebuf.move_to_reg(REG_EAX, result);
-        printf("ret\n");
-        // Epilog:
-        // addl $frame_size, %esp
-        codebuf.put_byte(0x81);
-        codebuf.put_byte(0xc4);
-        codebuf.put_uint32(codebuf.frame_size);
-        codebuf.put_ret();
-      } else {
-        assert(!"Unknown instruction type");
-      }
-    }
+    translate_bb(bb, codebuf);
 
     fflush(stdout);
     codebuf.dump();
