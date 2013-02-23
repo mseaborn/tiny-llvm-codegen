@@ -323,7 +323,14 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
       codebuf.put_byte(0x81);
       codebuf.put_byte(0xec);
       codebuf.put_uint32(size);
-      codebuf.spill(REG_ESP, op);
+      if (codebuf.frame_callees_args_size != 0) {
+        // leal OFFSET(%esp), %eax
+        codebuf.put_code(TEMPL("\x8d\x84\x24"));
+        codebuf.put_uint32(codebuf.frame_callees_args_size);
+        codebuf.spill(REG_EAX, op);
+      } else {
+        codebuf.spill(REG_ESP, op);
+      }
     } else {
       assert(!"Unknown instruction type");
     }
@@ -516,6 +523,9 @@ int main() {
   {
     int (*funcp)(void);
     GET_FUNC(funcp, "test_alloca");
+    ASSERT_EQ(funcp(), 125);
+
+    GET_FUNC(funcp, "test_alloca2");
     ASSERT_EQ(funcp(), 125);
   }
 

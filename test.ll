@@ -88,3 +88,16 @@ define i32 @test_alloca() {
   %1 = load i32* %addr
   ret i32 %1
 }
+
+define void @func_with_args(i32 %arg1, i32 %arg2) {
+  ret void
+}
+
+define i32 @test_alloca2() {
+  %addr = alloca i32
+  store i32 125, i32* %addr
+  ; We are checking that the args don't clobber %addr.
+  call void @func_with_args(i32 98, i32 99)
+  %1 = load i32* %addr
+  ret i32 %1
+}
