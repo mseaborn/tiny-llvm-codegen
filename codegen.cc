@@ -22,7 +22,7 @@ void dump_range_as_code(char *start, char *end) {
   assert(fp);
   fwrite(start, 1, end - start, fp);
   fclose(fp);
-  system("objdump -D -b binary -m i386 tmp_data");
+  system("objdump -D -b binary -m i386 tmp_data | grep '^ '");
 }
 
 class CodeBuf {
@@ -70,22 +70,35 @@ public:
       put_global_reloc(global);
     } else {
       std::map<llvm::Value*,int>::iterator slot = stackslots.find(value);
-      int stack_offset;
+      int ebp_offset;
       if (slot == stackslots.end()) {
         llvm::Argument *arg = llvm::cast<llvm::Argument>(value);
-        stack_offset = frame_size + 4 + arg->getArgNo() * 4;
+        int offset = 8; // Skip return address and frame pointer
+        ebp_offset = offset + arg->getArgNo() * 4;
       } else {
-        stack_offset = slot->second;
+        ebp_offset = -slot->second;
       }
-      // movl stack_offset(%esp), %reg
+      // movl ebp_offset(%ebp), %reg
       put_byte(0x8b);
-      put_byte(0x84 | (reg << 3));
-      put_byte(0x24);
-      put_uint32(stack_offset);
+      put_byte(0x85 | (reg << 3));
+      put_uint32(ebp_offset);
+      // Omit-frame-pointer version:
+      // // movl stack_offset(%esp), %reg
+      // put_byte(0x8b);
+      // put_byte(0x84 | (reg << 3));
+      // put_byte(0x24);
+      // put_uint32(stack_offset);
     }
   }
 
-  void write_reg_to_stack_offset(int reg, int stack_offset) {
+  void write_reg_to_ebp_offset(int reg, int stack_offset) {
+    // movl %reg, stack_offset(%ebp)
+    put_byte(0x89);
+    put_byte(0x85 | (reg << 3));
+    put_uint32(stack_offset);
+  }
+
+  void write_reg_to_esp_offset(int reg, int stack_offset) {
     // movl %reg, stack_offset(%esp)
     put_byte(0x89);
     put_byte(0x84 | (reg << 3));
@@ -94,7 +107,7 @@ public:
   }
 
   void spill(int reg, llvm::Instruction *inst) {
-    write_reg_to_stack_offset(reg, stackslots[inst]);
+    write_reg_to_ebp_offset(reg, -stackslots[inst]);
   }
 
   void put_ret() {
@@ -141,7 +154,8 @@ public:
   std::map<llvm::Value*,int> stackslots;
   std::map<llvm::BasicBlock*,uint32_t> labels;
   std::map<llvm::GlobalValue*,uint32_t> globals;
-  int frame_size;
+  int frame_vars_size;
+  int frame_callees_args_size;
 
   typedef std::pair<uint32_t*,llvm::BasicBlock*> JumpReloc;
   std::vector<JumpReloc> jump_relocs;
@@ -169,6 +183,10 @@ enum {
   REG_ECX,
   REG_EDX,
   REG_EBX,
+  REG_ESP,
+  REG_EBP,
+  REG_ESI,
+  REG_EDI,
 };
 
 void handle_phi_nodes(llvm::BasicBlock *from_bb,
@@ -199,7 +217,8 @@ int get_args_stack_size(llvm::CallInst *call) {
   return call->getNumArgOperands() * 4;
 }
 
-void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
+void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
+                  llvm::TargetData &data_layout) {
   for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
        inst != bb->end();
        ++inst) {
@@ -258,10 +277,12 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
       if (llvm::Value *result = op->getReturnValue())
         codebuf.move_to_reg(REG_EAX, result);
       // Epilog:
-      // addl $frame_size, %esp
-      codebuf.put_byte(0x81);
-      codebuf.put_byte(0xc4);
-      codebuf.put_uint32(codebuf.frame_size);
+      codebuf.put_byte(0xc9); // leave
+      // Omit-frame-pointer version:
+      // // addl $frame_size, %esp
+      // codebuf.put_byte(0x81);
+      // codebuf.put_byte(0xc4);
+      // codebuf.put_uint32(codebuf.frame_size);
       codebuf.put_ret();
     } else if (llvm::BranchInst *op =
                llvm::dyn_cast<llvm::BranchInst>(inst)) {
@@ -287,12 +308,22 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
       for (unsigned i = 0; i < op->getNumArgOperands(); ++i) {
         codebuf.move_to_reg(REG_EAX, op->getArgOperand(i));
         // Assume args are all 32-bit
-        codebuf.write_reg_to_stack_offset(REG_EAX, i * 4);
+        codebuf.write_reg_to_esp_offset(REG_EAX, i * 4);
       }
       // TODO: Optimise to output direct calls too
       codebuf.move_to_reg(REG_EAX, op->getCalledValue());
       codebuf.put_code(TEMPL("\xff\xd0")); // call *%eax
       codebuf.spill(REG_EAX, op);
+    } else if (llvm::AllocaInst *op = llvm::dyn_cast<llvm::AllocaInst>(inst)) {
+      // XXX: Handle alignment
+      // XXX: Handle variable sizes
+      assert(!op->isArrayAllocation());
+      int size = data_layout.getTypeAllocSize(op->getAllocatedType());
+      // subl $size, %esp
+      codebuf.put_byte(0x81);
+      codebuf.put_byte(0xec);
+      codebuf.put_uint32(size);
+      codebuf.spill(REG_ESP, op);
     } else {
       assert(!"Unknown instruction type");
     }
@@ -334,34 +365,41 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
         }
       }
     }
+    codebuf.frame_callees_args_size = callees_args_size;
 
-    int offset = callees_args_size;
+    int vars_size = 0;
     for (llvm::Function::iterator bb = func->begin();
          bb != func->end();
          ++bb) {
       for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
            inst != bb->end();
            ++inst) {
-        codebuf.stackslots[inst] = offset;
-        offset += 4; // XXX: fixed size
+        // XXX: We assume variables are int32s
+        vars_size += 4;
+        codebuf.stackslots[inst] = vars_size;
       }
     }
+    codebuf.frame_vars_size = vars_size;
+    int frame_size = codebuf.frame_vars_size + codebuf.frame_callees_args_size;
+
     char *function_entry = codebuf.get_current_pos();
-    codebuf.frame_size = offset;
     // Prolog:
+    codebuf.put_byte(0x55); // pushl %ebp
+    codebuf.put_code(TEMPL("\x89\xe5")); // movl %esp, %ebp
     // subl $frame_size, %esp
     codebuf.put_byte(0x81);
     codebuf.put_byte(0xec);
-    codebuf.put_uint32(codebuf.frame_size);
+    codebuf.put_uint32(frame_size);
 
     for (llvm::Function::iterator bb = func->begin();
          bb != func->end();
          ++bb) {
-      translate_bb(bb, codebuf);
+      translate_bb(bb, codebuf, data_layout);
     }
 
     codebuf.apply_jump_relocs();
     codebuf.apply_global_relocs();
+    printf("%s:\n", func->getName().data());
     fflush(stdout);
     dump_range_as_code(function_entry, codebuf.get_current_pos());
 
@@ -390,6 +428,11 @@ int sub_func(int x, int y) {
   return x - y;
 }
 
+#define GET_FUNC(func, name) \
+    printf("testing %s\n", name); \
+    func = (typeof(func)) (funcs[name]); \
+    assert(func);
+
 int main() {
   llvm::SMDiagnostic err;
   llvm::LLVMContext &context = llvm::getGlobalContext();
@@ -405,18 +448,18 @@ int main() {
 
   int (*func)(int arg);
 
-  func = (typeof(func))(funcs["test_return"]);
+  GET_FUNC(func, "test_return");
   assert(func(0) == 123);
 
-  func = (typeof(func))(funcs["test_add"]);
+  GET_FUNC(func, "test_add");
   assert(func(99) == 199);
 
-  func = (typeof(func))(funcs["test_sub"]);
+  GET_FUNC(func, "test_sub");
   assert(func(200) == 800);
 
   {
     int (*funcp)(int *ptr);
-    funcp = (typeof(funcp))(funcs["test_load_int32"]);
+    GET_FUNC(funcp, "test_load_int32");
     int value = 0x12345678;
     int cell = value;
     assert(funcp(&cell) == value);
@@ -424,50 +467,56 @@ int main() {
 
   {
     void (*funcp)(int *ptr, int value);
-    funcp = (typeof(funcp))(funcs["test_store_int32"]);
+    GET_FUNC(funcp, "test_store_int32");
     int value = 0x12345678;
     int cell = 0;
     funcp(&cell, value);
     assert(cell == value);
   }
 
-  func = (typeof(func))(funcs["test_compare"]);
+  GET_FUNC(func, "test_compare");
   ASSERT_EQ(func(99), 1);
   ASSERT_EQ(func(98), 0);
   ASSERT_EQ(func(100), 0);
 
-  func = (typeof(func))(funcs["test_branch"]);
+  GET_FUNC(func, "test_branch");
   ASSERT_EQ(func(0), 101);
 
-  func = (typeof(func))(funcs["test_conditional"]);
+  GET_FUNC(func, "test_conditional");
   ASSERT_EQ(func(99), 123);
   ASSERT_EQ(func(98), 456);
 
-  func = (typeof(func))(funcs["test_phi"]);
+  GET_FUNC(func, "test_phi");
   ASSERT_EQ(func(99), 123);
   ASSERT_EQ(func(98), 456);
 
   {
     int (*funcp)(int (*func)(int arg1, int arg2), int arg1, int arg2);
-    funcp = (typeof(funcp))(funcs["test_call"]);
+    GET_FUNC(funcp, "test_call");
     ASSERT_EQ(funcp(sub_func, 50, 10), 1040);
 
-    funcp = (typeof(funcp))(funcs["test_call2"]);
+    GET_FUNC(funcp, "test_call2");
     ASSERT_EQ(funcp(sub_func, 50, 10), 40);
   }
 
   {
     int (*funcp)(void);
-    funcp = (typeof(funcp))(funcs["test_direct_call"]);
+    GET_FUNC(funcp, "test_direct_call");
     ASSERT_EQ(funcp(), 123);
   }
 
   {
     int *(*funcp)(void);
-    funcp = (typeof(funcp))(funcs["get_global"]);
+    GET_FUNC(funcp, "get_global");
     int *ptr = funcp();
     assert(ptr);
     ASSERT_EQ(*ptr, 124);
+  }
+
+  {
+    int (*funcp)(void);
+    GET_FUNC(funcp, "test_alloca");
+    ASSERT_EQ(funcp(), 125);
   }
 
   printf("OK\n");
