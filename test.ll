@@ -97,6 +97,8 @@ define i16 *@get_global_array() {
   ret i16* getelementptr ([3 x [2 x i16]]* @array, i32 0, i32 2, i32 1)
 }
 
+@ptr_reloc = global i32* @global1
+
 define i32 @test_alloca() {
   %addr = alloca i32
   store i32 125, i32* %addr

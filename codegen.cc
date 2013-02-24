@@ -366,7 +366,8 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
   }
 }
 
-void write_global(DataSegment *dataseg, llvm::Constant *init) {
+void write_global(CodeBuf *codebuf, DataSegment *dataseg,
+                  llvm::Constant *init) {
   if (llvm::ConstantInt *val = llvm::dyn_cast<llvm::ConstantInt>(init)) {
     assert(val->getBitWidth() % 8 == 0);
     int size = val->getBitWidth() / 8;
@@ -376,10 +377,22 @@ void write_global(DataSegment *dataseg, llvm::Constant *init) {
   } else if (llvm::ConstantArray *val =
              llvm::dyn_cast<llvm::ConstantArray>(init)) {
     for (unsigned i = 0; i < val->getNumOperands(); ++i) {
-      write_global(dataseg, val->getOperand(i));
+      write_global(codebuf, dataseg, val->getOperand(i));
     }
   } else {
-    assert(!"Unknown constant type");
+    // TODO: unify fully with expand_constant().
+    llvm::GlobalValue *global;
+    int offset;
+    expand_constant(init, codebuf->data_layout, &global, &offset);
+    assert(global);
+    // This mirrors put_global_reloc().
+    // TODO: unify these.
+    codebuf->global_relocs.push_back(
+        CodeBuf::GlobalReloc((uint32_t *) dataseg->current, global));
+    assert(codebuf->data_layout->getTypeAllocSize(init->getType())
+           == sizeof(uint32_t));
+    *(uint32_t *) dataseg->current = offset;
+    dataseg->current += sizeof(uint32_t);
   }
 }
 
@@ -399,7 +412,7 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
       data_layout.getTypeAllocSize(global->getType()->getElementType());
     codebuf.globals[global] = (uint32_t) dataseg.current;
     if (llvm::Constant *init = global->getInitializer()) {
-      write_global(&dataseg, init);
+      write_global(&codebuf, &dataseg, init);
       assert(dataseg.current == (char *) addr + size);
     } else {
       dataseg.current += size;
