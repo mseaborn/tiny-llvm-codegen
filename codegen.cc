@@ -141,6 +141,7 @@ public:
   }
 
   void make_label(llvm::BasicBlock *bb) {
+    assert(labels.count(bb) == 0);
     labels[bb] = (uint32_t) current_;
   }
 
@@ -247,10 +248,10 @@ int get_args_stack_size(llvm::CallInst *call) {
 
 void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
                   llvm::TargetData &data_layout) {
+  codebuf.make_label(bb);
   for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
        inst != bb->end();
        ++inst) {
-    codebuf.make_label(bb);
     if (llvm::BinaryOperator *op =
         llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
       codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
