@@ -25,6 +25,29 @@ void dump_range_as_code(char *start, char *end) {
   system("objdump -D -b binary -m i386 tmp_data | grep '^ '");
 }
 
+void expand_constant(llvm::Constant *val, llvm::GlobalValue **result_global,
+                     int *result_offset) {
+  if (llvm::GlobalValue *global = llvm::dyn_cast<llvm::GlobalValue>(val)) {
+    *result_global = global;
+    *result_offset = 0;
+  } else if (llvm::ConstantExpr *expr =
+             llvm::dyn_cast<llvm::ConstantExpr>(val)) {
+    if (expr->getOpcode() == llvm::Instruction::GetElementPtr) {
+      expand_constant(expr->getOperand(0), result_global, result_offset);
+      for (unsigned i = 1; i < expr->getNumOperands(); ++i) {
+        // TODO: handle non-zero offsets
+        llvm::ConstantInt *offset =
+          llvm::cast<llvm::ConstantInt>(expr->getOperand(i));
+        assert(offset->getLimitedValue() == 0);
+      }
+    } else {
+      assert(!"Unknown ConstantExpr");
+    }
+  } else {
+    assert(!"Unknown constant type");
+  }
+}
+
 class CodeBuf {
   char *buf_;
   char *current_;
@@ -63,8 +86,11 @@ public:
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       put_uint32(val);
-    } else if (llvm::GlobalValue *global =
-               llvm::dyn_cast<llvm::GlobalValue>(value)) {
+    } else if (llvm::Constant *cval = llvm::dyn_cast<llvm::Constant>(value)) {
+      llvm::GlobalValue *global;
+      int offset;
+      expand_constant(cval, &global, &offset);
+      assert(offset == 0); // XXX: handle non-zero offsets
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       put_global_reloc(global);
@@ -539,6 +565,14 @@ int main() {
     int *ptr = funcp();
     assert(ptr);
     ASSERT_EQ(*ptr, 124);
+  }
+
+  {
+    char *(*funcp)(void);
+    GET_FUNC(funcp, "get_global_string");
+    char *str = funcp();
+    assert(str);
+    ASSERT_EQ(strcmp(str, "Hello!"), 0);
   }
 
   {

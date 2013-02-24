@@ -84,6 +84,10 @@ define i32* @get_global() {
 
 @string = constant [7 x i8] c"Hello!\00"
 
+define i8* @get_global_string() {
+  ret i8* getelementptr ([7 x i8]* @string, i32 0, i32 0)
+}
+
 define i32 @test_alloca() {
   %addr = alloca i32
   store i32 125, i32* %addr
