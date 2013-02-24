@@ -370,14 +370,35 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
                   llvm::Constant *init) {
   if (llvm::ConstantInt *val = llvm::dyn_cast<llvm::ConstantInt>(init)) {
     assert(val->getBitWidth() % 8 == 0);
-    int size = val->getBitWidth() / 8;
+    size_t size = val->getBitWidth() / 8;
     // Assumes little endian.
     memcpy(dataseg->current, val->getValue().getRawData(), size);
     dataseg->current += size;
+    assert(codebuf->data_layout->getTypeAllocSize(init->getType()) == size);
   } else if (llvm::ConstantArray *val =
              llvm::dyn_cast<llvm::ConstantArray>(init)) {
     for (unsigned i = 0; i < val->getNumOperands(); ++i) {
       write_global(codebuf, dataseg, val->getOperand(i));
+    }
+  } else if (llvm::ConstantStruct *val =
+             llvm::dyn_cast<llvm::ConstantStruct>(init)) {
+    const llvm::StructLayout *layout = codebuf->data_layout->getStructLayout(
+        val->getType());
+    uint64_t prev_offset = 0;
+    for (unsigned i = 0; i < val->getNumOperands(); ++i) {
+      llvm::Constant *field = val->getOperand(i);
+      write_global(codebuf, dataseg, field);
+
+      // Add padding.
+      uint64_t next_offset =
+        i == val->getNumOperands() - 1
+        ? codebuf->data_layout->getTypeAllocSize(init->getType())
+        : layout->getElementOffset(i + 1);
+      uint64_t field_size =
+        codebuf->data_layout->getTypeAllocSize(field->getType());
+      uint64_t padding_size = next_offset - prev_offset - field_size;
+      dataseg->current += padding_size;
+      prev_offset = next_offset;
     }
   } else {
     // TODO: unify fully with expand_constant().
@@ -608,6 +629,14 @@ int main() {
   {
     int **ptr_reloc = (int **) globals["ptr_reloc"];
     assert(*ptr_reloc == (int *) globals["global1"]);
+  }
+
+  {
+    struct MyStruct { uint8_t a; uint32_t b; uint8_t c; };
+    struct MyStruct *ptr = (struct MyStruct *) globals["struct_val"];
+    ASSERT_EQ(ptr->a, 11);
+    ASSERT_EQ(ptr->b, 22);
+    ASSERT_EQ(ptr->c, 33);
   }
 
   {

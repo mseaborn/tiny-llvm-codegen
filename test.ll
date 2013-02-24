@@ -99,6 +99,9 @@ define i16 *@get_global_array() {
 
 @ptr_reloc = global i32* @global1
 
+%MyStruct = type { i8, i32, i8 }
+@struct_val = global %MyStruct { i8 11, i32 22, i8 33 }
+
 define i32 @test_alloca() {
   %addr = alloca i32
   store i32 125, i32* %addr
