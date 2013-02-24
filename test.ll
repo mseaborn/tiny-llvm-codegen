@@ -88,6 +88,15 @@ define i8* @get_global_string() {
   ret i8* getelementptr ([7 x i8]* @string, i32 0, i32 0)
 }
 
+@array = constant [3 x [2 x i16]]
+  [[2 x i16] [i16 1, i16 2],
+   [2 x i16] [i16 3, i16 4],
+   [2 x i16] [i16 5, i16 6]]
+
+define i16 *@get_global_array() {
+  ret i16* getelementptr ([3 x [2 x i16]]* @array, i32 0, i32 2, i32 1)
+}
+
 define i32 @test_alloca() {
   %addr = alloca i32
   store i32 125, i32* %addr

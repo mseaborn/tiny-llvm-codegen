@@ -25,21 +25,20 @@ void dump_range_as_code(char *start, char *end) {
   system("objdump -D -b binary -m i386 tmp_data | grep '^ '");
 }
 
-void expand_constant(llvm::Constant *val, llvm::GlobalValue **result_global,
-                     int *result_offset) {
+void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
+                     llvm::GlobalValue **result_global, int *result_offset) {
   if (llvm::GlobalValue *global = llvm::dyn_cast<llvm::GlobalValue>(val)) {
     *result_global = global;
     *result_offset = 0;
   } else if (llvm::ConstantExpr *expr =
              llvm::dyn_cast<llvm::ConstantExpr>(val)) {
     if (expr->getOpcode() == llvm::Instruction::GetElementPtr) {
-      expand_constant(expr->getOperand(0), result_global, result_offset);
-      for (unsigned i = 1; i < expr->getNumOperands(); ++i) {
-        // TODO: handle non-zero offsets
-        llvm::ConstantInt *offset =
-          llvm::cast<llvm::ConstantInt>(expr->getOperand(i));
-        assert(offset->getLimitedValue() == 0);
-      }
+      expand_constant(expr->getOperand(0), data_layout,
+                      result_global, result_offset);
+      llvm::SmallVector<llvm::Value*,8> indexes(expr->op_begin() + 1,
+                                                expr->op_end());
+      *result_offset += data_layout->getIndexedOffset(
+          expr->getOperand(0)->getType(), indexes);
     } else {
       assert(!"Unknown ConstantExpr");
     }
@@ -89,11 +88,10 @@ public:
     } else if (llvm::Constant *cval = llvm::dyn_cast<llvm::Constant>(value)) {
       llvm::GlobalValue *global;
       int offset;
-      expand_constant(cval, &global, &offset);
-      assert(offset == 0); // XXX: handle non-zero offsets
+      expand_constant(cval, data_layout, &global, &offset);
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
-      put_global_reloc(global);
+      put_global_reloc(global, offset);
     } else if (llvm::Argument *arg = llvm::dyn_cast<llvm::Argument>(value)) {
       int offset = 8; // Skip return address and frame pointer
       read_reg_from_ebp_offset(reg, offset + arg->getArgNo() * 4);
@@ -151,9 +149,9 @@ public:
     jump_relocs.push_back(JumpReloc((uint32_t *) current_, dest));
   }
 
-  void put_global_reloc(llvm::GlobalValue *dest) {
+  void put_global_reloc(llvm::GlobalValue *dest, int offset) {
     global_relocs.push_back(GlobalReloc((uint32_t *) current_, dest));
-    put_uint32(0); // Placeholder
+    put_uint32(offset);
   }
 
   void apply_jump_relocs() {
@@ -174,7 +172,7 @@ public:
       assert(globals.count(reloc->second) == 1);
       uint32_t value = globals[reloc->second];
       uint32_t *addr = reloc->first;
-      *addr = value;
+      *addr += value;
     }
   }
 
@@ -184,6 +182,8 @@ public:
   std::map<llvm::GlobalValue*,uint32_t> globals;
   int frame_vars_size;
   int frame_callees_args_size;
+
+  llvm::TargetData *data_layout;
 
   typedef std::pair<uint32_t*,llvm::BasicBlock*> JumpReloc;
   std::vector<JumpReloc> jump_relocs;
@@ -387,6 +387,8 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
   DataSegment dataseg;
 
   llvm::TargetData data_layout(module);
+  codebuf.data_layout = &data_layout;
+
   for (llvm::Module::GlobalListType::iterator global = module->global_begin();
        global != module->global_end();
        ++global) {
@@ -451,8 +453,6 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
       translate_bb(bb, codebuf, data_layout);
     }
 
-    codebuf.apply_jump_relocs();
-    codebuf.apply_global_relocs();
     printf("%s:\n", func->getName().data());
     fflush(stdout);
     dump_range_as_code(function_entry, codebuf.get_current_pos());
@@ -460,6 +460,8 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
     codebuf.globals[func] = (uintptr_t) function_entry;
     (*funcs)[func->getName()] = (uintptr_t) function_entry;
   }
+  codebuf.apply_jump_relocs();
+  codebuf.apply_global_relocs();
 }
 
 void my_assert(int val1, int val2, const char *expr1, const char *expr2,
@@ -573,6 +575,14 @@ int main() {
     char *str = funcp();
     assert(str);
     ASSERT_EQ(strcmp(str, "Hello!"), 0);
+  }
+
+  {
+    short *(*funcp)(void);
+    GET_FUNC(funcp, "get_global_array");
+    short *array = funcp();
+    ASSERT_EQ(array[0], 6);
+    ASSERT_EQ(array[-1], 5);
   }
 
   {
