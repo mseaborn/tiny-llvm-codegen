@@ -68,27 +68,29 @@ public:
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       put_global_reloc(global);
+    } else if (llvm::Argument *arg = llvm::dyn_cast<llvm::Argument>(value)) {
+      int offset = 8; // Skip return address and frame pointer
+      read_reg_from_ebp_offset(reg, offset + arg->getArgNo() * 4);
+    } else if (llvm::Instruction *inst =
+               llvm::dyn_cast<llvm::Instruction>(value)) {
+      assert(stackslots.count(inst) == 1);
+      read_reg_from_ebp_offset(reg, -stackslots[inst]);
     } else {
-      std::map<llvm::Value*,int>::iterator slot = stackslots.find(value);
-      int ebp_offset;
-      if (slot == stackslots.end()) {
-        llvm::Argument *arg = llvm::cast<llvm::Argument>(value);
-        int offset = 8; // Skip return address and frame pointer
-        ebp_offset = offset + arg->getArgNo() * 4;
-      } else {
-        ebp_offset = -slot->second;
-      }
-      // movl ebp_offset(%ebp), %reg
-      put_byte(0x8b);
-      put_byte(0x85 | (reg << 3));
-      put_uint32(ebp_offset);
-      // Omit-frame-pointer version:
-      // // movl stack_offset(%esp), %reg
-      // put_byte(0x8b);
-      // put_byte(0x84 | (reg << 3));
-      // put_byte(0x24);
-      // put_uint32(stack_offset);
+      assert(!"Unknown value type");
     }
+  }
+
+  void read_reg_from_ebp_offset(int reg, int ebp_offset) {
+    // movl ebp_offset(%ebp), %reg
+    put_byte(0x8b);
+    put_byte(0x85 | (reg << 3));
+    put_uint32(ebp_offset);
+    // Omit-frame-pointer version:
+    // // movl stack_offset(%esp), %reg
+    // put_byte(0x8b);
+    // put_byte(0x84 | (reg << 3));
+    // put_byte(0x24);
+    // put_uint32(stack_offset);
   }
 
   void write_reg_to_ebp_offset(int reg, int stack_offset) {
@@ -151,7 +153,7 @@ public:
   }
 
   // XXX: move somewhere better
-  std::map<llvm::Value*,int> stackslots;
+  std::map<llvm::Instruction*,int> stackslots;
   std::map<llvm::BasicBlock*,uint32_t> labels;
   std::map<llvm::GlobalValue*,uint32_t> globals;
   int frame_vars_size;
