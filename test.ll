@@ -82,6 +82,8 @@ define i32* @get_global() {
   ret i32* @global1
 }
 
+@string = constant [7 x i8] c"Hello!\00"
+
 define i32 @test_alloca() {
   %addr = alloca i32
   store i32 125, i32* %addr

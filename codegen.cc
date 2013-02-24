@@ -337,6 +337,23 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
   }
 }
 
+void write_global(DataSegment *dataseg, llvm::Constant *init) {
+  if (llvm::ConstantInt *val = llvm::dyn_cast<llvm::ConstantInt>(init)) {
+    assert(val->getBitWidth() % 8 == 0);
+    int size = val->getBitWidth() / 8;
+    // Assumes little endian.
+    memcpy(dataseg->current, val->getValue().getRawData(), size);
+    dataseg->current += size;
+  } else if (llvm::ConstantArray *val =
+             llvm::dyn_cast<llvm::ConstantArray>(init)) {
+    for (unsigned i = 0; i < val->getNumOperands(); ++i) {
+      write_global(dataseg, val->getOperand(i));
+    }
+  } else {
+    assert(!"Unknown constant type");
+  }
+}
+
 void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
   CodeBuf codebuf;
   DataSegment dataseg;
@@ -346,14 +363,16 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
        global != module->global_end();
        ++global) {
     // TODO: handle alignments
-    if (llvm::Constant *init = global->getInitializer()) {
-      llvm::ConstantInt *val = llvm::cast<llvm::ConstantInt>(init);
-      // XXX: truncates
-      uint32_t ival = val->getLimitedValue();
-      *(uint32_t *) dataseg.current = ival;
-    }
+    uint32_t addr = (uint32_t) dataseg.current;
+    size_t size =
+      data_layout.getTypeAllocSize(global->getType()->getElementType());
     codebuf.globals[global] = (uint32_t) dataseg.current;
-    dataseg.current += data_layout.getTypeAllocSize(global->getType());
+    if (llvm::Constant *init = global->getInitializer()) {
+      write_global(&dataseg, init);
+      assert(dataseg.current == (char *) addr + size);
+    } else {
+      dataseg.current += size;
+    }
   }
 
   for (llvm::Module::FunctionListType::iterator func = module->begin();
