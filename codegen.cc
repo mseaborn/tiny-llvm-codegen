@@ -396,7 +396,7 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
   }
 }
 
-void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
+void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
   CodeBuf codebuf;
   DataSegment dataseg;
 
@@ -472,10 +472,16 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *funcs) {
     dump_range_as_code(function_entry, codebuf.get_current_pos());
 
     codebuf.globals[func] = (uintptr_t) function_entry;
-    (*funcs)[func->getName()] = (uintptr_t) function_entry;
   }
   codebuf.apply_jump_relocs();
   codebuf.apply_global_relocs();
+
+  for (std::map<llvm::GlobalValue*,uint32_t>::iterator global =
+         codebuf.globals.begin();
+       global != codebuf.globals.end();
+       ++global) {
+    (*globals)[global->first->getName()] = global->second;
+  }
 }
 
 void my_assert(int val1, int val2, const char *expr1, const char *expr2,
@@ -500,7 +506,7 @@ int sub_func(int x, int y) {
 
 #define GET_FUNC(func, name) \
     printf("testing %s\n", name); \
-    func = (typeof(func)) (funcs[name]); \
+    func = (typeof(func)) (globals[name]); \
     assert(func);
 
 int main() {
@@ -513,8 +519,8 @@ int main() {
     return 1;
   }
 
-  std::map<std::string,uintptr_t> funcs;
-  translate(module, &funcs);
+  std::map<std::string,uintptr_t> globals;
+  translate(module, &globals);
 
   int (*func)(int arg);
 
@@ -597,6 +603,11 @@ int main() {
     short *array = funcp();
     ASSERT_EQ(array[0], 6);
     ASSERT_EQ(array[-1], 5);
+  }
+
+  {
+    int **ptr_reloc = (int **) globals["ptr_reloc"];
+    assert(*ptr_reloc == (int *) globals["global1"]);
   }
 
   {
