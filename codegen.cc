@@ -692,6 +692,8 @@ void test_features() {
   }
 }
 
+#define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
+
 void test_arithmetic() {
   llvm::SMDiagnostic err;
   llvm::LLVMContext &context = llvm::getGlobalContext();
@@ -709,13 +711,22 @@ void test_arithmetic() {
 
   for (int i = 0; test_funcs[i].name != NULL; ++i) {
     printf("test %s\n", test_funcs[i].name);
-    uint32_t arg1 = 400;
-    uint32_t arg2 = 100;
-    uint32_t expected_result = 0;
-    uint32_t actual_result = 0;
-    test_funcs[i].func(&arg1, &arg2, &expected_result);
-    translated_test_funcs[i].func(&arg1, &arg2, &actual_result);
-    ASSERT_EQ(expected_result, actual_result);
+    int test_args[][2] = {
+      { 400, 100 },
+      { -3, -4 },
+      { 3, -4 },
+      { -3, 4 },
+    };
+    for (unsigned j = 0; j < ARRAY_SIZE(test_args); ++j) {
+      uint32_t arg1 = test_args[j][0];
+      uint32_t arg2 = test_args[j][1];
+      uint32_t expected_result = 0;
+      uint32_t actual_result = 0;
+      test_funcs[i].func(&arg1, &arg2, &expected_result);
+      translated_test_funcs[i].func(&arg1, &arg2, &actual_result);
+      printf("  %i, %i -> %i\n", arg1, arg2, actual_result);
+      ASSERT_EQ(expected_result, actual_result);
+    }
   }
 }
 
