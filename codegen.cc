@@ -375,6 +375,8 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
     memcpy(dataseg->current, val->getValue().getRawData(), size);
     dataseg->current += size;
     assert(codebuf->data_layout->getTypeAllocSize(init->getType()) == size);
+  } else if (llvm::dyn_cast<llvm::ConstantAggregateZero>(init)) {
+    dataseg->current += codebuf->data_layout->getTypeAllocSize(init->getType());
   } else if (llvm::ConstantArray *val =
              llvm::dyn_cast<llvm::ConstantArray>(init)) {
     for (unsigned i = 0; i < val->getNumOperands(); ++i) {
@@ -637,6 +639,10 @@ void test_features() {
     ASSERT_EQ(ptr->a, 11);
     ASSERT_EQ(ptr->b, 22);
     ASSERT_EQ(ptr->c, 33);
+    ptr = (struct MyStruct *) globals["struct_zero_init"];
+    ASSERT_EQ(ptr->a, 0);
+    ASSERT_EQ(ptr->b, 0);
+    ASSERT_EQ(ptr->c, 0);
   }
 
   {

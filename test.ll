@@ -101,6 +101,7 @@ define i16 *@get_global_array() {
 
 %MyStruct = type { i8, i32, i8 }
 @struct_val = global %MyStruct { i8 11, i32 22, i8 33 }
+@struct_zero_init = global %MyStruct zeroinitializer
 
 define i32 @test_alloca() {
   %addr = alloca i32
