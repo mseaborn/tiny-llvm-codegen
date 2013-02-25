@@ -253,21 +253,21 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
        ++inst) {
     if (llvm::BinaryOperator *op =
         llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
-      codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
-      codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
+      codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
+      codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
       switch (op->getOpcode()) {
         case llvm::Instruction::Add: {
-          // %ecx += %eax
-          char code[2] = { 0x01, 0xc1 }; // addl %eax, %ecx
+          // %eax += %ecx
+          char code[2] = { 0x01, 0xc8 }; // addl %ecx, %eax
           codebuf.put_code(code, sizeof(code));
-          codebuf.spill(REG_ECX, inst);
+          codebuf.spill(REG_EAX, inst);
           break;
         }
         case llvm::Instruction::Sub: {
-          // %ecx -= %eax
-          char code[2] = { 0x29, 0xc1 }; // subl %eax, %ecx
+          // %eax -= %ecx
+          char code[2] = { 0x29, 0xc8 }; // subl %ecx, %eax
           codebuf.put_code(code, sizeof(code));
-          codebuf.spill(REG_ECX, inst);
+          codebuf.spill(REG_EAX, inst);
           break;
         }
         case llvm::Instruction::Mul: {
@@ -275,6 +275,23 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
           // %eax = (uint32_t) result
           // %edx = (uint32_t) (result >> 32) -- we ignore this
           char code[2] = { 0xf7, 0xe1 }; // mull %ecx
+          codebuf.put_code(code, sizeof(code));
+          codebuf.spill(REG_EAX, inst);
+          break;
+        }
+        case llvm::Instruction::UDiv: {
+          codebuf.put_code(TEMPL("\x31\xd2")); // xorl %edx, %edx
+          // %eax = ((%edx << 32) | %eax) / %ecx
+          char code[2] = { 0xf7, 0xf1 }; // divl %ecx
+          codebuf.put_code(code, sizeof(code));
+          codebuf.spill(REG_EAX, inst);
+          break;
+        }
+        case llvm::Instruction::SDiv: {
+          // Fill %edx with sign bit of %eax
+          codebuf.put_code(TEMPL("\x99")); // cltd (cdq in Intel syntax)
+          // %eax = ((%edx << 32) | %eax) / %ecx
+          char code[2] = { 0xf7, 0xf9 }; // idivl %ecx
           codebuf.put_code(code, sizeof(code));
           codebuf.spill(REG_EAX, inst);
           break;
@@ -713,9 +730,10 @@ void test_arithmetic() {
     printf("test %s\n", test_funcs[i].name);
     int test_args[][2] = {
       { 400, 100 },
-      { -3, -4 },
-      { 3, -4 },
-      { -3, 4 },
+      // Good for testing multiplication and division:
+      { -7, -3 },
+      { 7, -3 },
+      { -7, 3 },
     };
     for (unsigned j = 0; j < ARRAY_SIZE(test_args); ++j) {
       uint32_t arg1 = test_args[j][0];
