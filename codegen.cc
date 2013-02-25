@@ -328,6 +328,9 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
       // Nothing to do: phi nodes are handled by branches.
       // XXX: Someone still needs to validate that phi nodes only
       // appear in the right places.
+    } else if (llvm::dyn_cast<llvm::BitCastInst>(inst)) {
+      // Nothing to do: already handled by having aliasing in
+      // stackslots.
     } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
       // We have already reserved space on the stack to store our
       // callee's argument.
@@ -473,10 +476,17 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
       for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
            inst != bb->end();
            ++inst) {
-        // XXX: We assume variables are int32s
-        vars_size += 4;
         assert(codebuf.stackslots.count(inst) == 0);
-        codebuf.stackslots[inst] = -vars_size;
+        if (llvm::dyn_cast<llvm::BitCastInst>(inst)) {
+          // Bitcast is a no-op: just reuse the same stack slot.
+          llvm::Value *op = inst->getOperand(0);
+          assert(codebuf.stackslots.count(op) == 1);
+          codebuf.stackslots[inst] = codebuf.stackslots[op];
+        } else {
+          // XXX: We assume variables are int32s
+          vars_size += 4;
+          codebuf.stackslots[inst] = -vars_size;
+        }
       }
     }
     codebuf.frame_vars_size = vars_size;
@@ -659,6 +669,12 @@ void test_features() {
 
     GET_FUNC(funcp, "test_alloca2");
     ASSERT_EQ(funcp(), 125);
+  }
+
+  {
+    int *(*funcp)(char *arg);
+    GET_FUNC(funcp, "test_bitcast");
+    assert(funcp((char *) 0x12345678) == (int *) 0x12345678);
   }
 }
 

@@ -122,3 +122,8 @@ define i32 @test_alloca2() {
   %1 = load i32* %addr
   ret i32 %1
 }
+
+define i32* @test_bitcast(i8* %arg) {
+  %1 = bitcast i8* %arg to i32*
+  ret i32* %1
+}
