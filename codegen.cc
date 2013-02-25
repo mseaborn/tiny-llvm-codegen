@@ -15,6 +15,8 @@
 // In LLVM 3.2, this becomes <llvm/DataLayout.h>
 #include <llvm/Target/TargetData.h>
 
+#include "arithmetic_test.h"
+
 #define TEMPL(string) string, (sizeof(string) - 1)
 
 void dump_range_as_code(char *start, char *end) {
@@ -678,8 +680,37 @@ void test_features() {
   }
 }
 
+void test_arithmetic() {
+  llvm::SMDiagnostic err;
+  llvm::LLVMContext &context = llvm::getGlobalContext();
+  const char *filename = "gen_arithmetic_test.ll";
+  llvm::Module *module = llvm::ParseIRFile(filename, err, context);
+  if (!module) {
+    fprintf(stderr, "failed to read file: %s\n", filename);
+    assert(0);
+  }
+
+  std::map<std::string,uintptr_t> globals;
+  translate(module, &globals);
+  struct TestFunc *translated_test_funcs =
+    (struct TestFunc *) globals["test_funcs"];
+
+  for (int i = 0; test_funcs[i].name != NULL; ++i) {
+    printf("test %s\n", test_funcs[i].name);
+    uint32_t arg1 = 400;
+    uint32_t arg2 = 100;
+    uint32_t expected_result = 0;
+    uint32_t actual_result = 0;
+    test_funcs[i].func(&arg1, &arg2, &expected_result);
+    translated_test_funcs[i].func(&arg1, &arg2, &actual_result);
+    ASSERT_EQ(expected_result, actual_result);
+  }
+}
+
 int main() {
   test_features();
+  test_arithmetic();
+
   printf("OK\n");
   return 0;
 }
