@@ -92,13 +92,10 @@ public:
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       put_global_reloc(global, offset);
-    } else if (llvm::Argument *arg = llvm::dyn_cast<llvm::Argument>(value)) {
-      int offset = 8; // Skip return address and frame pointer
-      read_reg_from_ebp_offset(reg, offset + arg->getArgNo() * 4);
-    } else if (llvm::Instruction *inst =
-               llvm::dyn_cast<llvm::Instruction>(value)) {
-      assert(stackslots.count(inst) == 1);
-      read_reg_from_ebp_offset(reg, -stackslots[inst]);
+    } else if (llvm::dyn_cast<llvm::Instruction>(value) ||
+               llvm::dyn_cast<llvm::Argument>(value)) {
+      assert(stackslots.count(value) == 1);
+      read_reg_from_ebp_offset(reg, stackslots[value]);
     } else {
       assert(!"Unknown value type");
     }
@@ -133,7 +130,7 @@ public:
   }
 
   void spill(int reg, llvm::Instruction *inst) {
-    write_reg_to_ebp_offset(reg, -stackslots[inst]);
+    write_reg_to_ebp_offset(reg, stackslots[inst]);
   }
 
   void put_ret() {
@@ -178,7 +175,7 @@ public:
   }
 
   // XXX: move somewhere better
-  std::map<llvm::Instruction*,int> stackslots;
+  std::map<llvm::Value*,int> stackslots;
   std::map<llvm::BasicBlock*,uint32_t> labels;
   std::map<llvm::GlobalValue*,uint32_t> globals;
   int frame_vars_size;
@@ -460,6 +457,15 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
     }
     codebuf.frame_callees_args_size = callees_args_size;
 
+    for (llvm::Function::ArgumentListType::iterator arg = func->arg_begin();
+         arg != func->arg_end();
+         ++arg) {
+      // XXX: We assume arguments are int32s
+      int offset = 8; // Skip return address and frame pointer
+      assert(codebuf.stackslots.count(arg) == 0);
+      codebuf.stackslots[arg] = offset + arg->getArgNo() * 4;
+    }
+
     int vars_size = 0;
     for (llvm::Function::iterator bb = func->begin();
          bb != func->end();
@@ -469,7 +475,8 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
            ++inst) {
         // XXX: We assume variables are int32s
         vars_size += 4;
-        codebuf.stackslots[inst] = vars_size;
+        assert(codebuf.stackslots.count(inst) == 0);
+        codebuf.stackslots[inst] = -vars_size;
       }
     }
     codebuf.frame_vars_size = vars_size;
