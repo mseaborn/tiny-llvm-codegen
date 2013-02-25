@@ -2,8 +2,8 @@
 OPERATORS = [
   ('add', '+'),
   ('sub', '-'),
-  # TODO: Enable these
-  # ('mul', '*'),
+  ('mul', '*'),
+  # TODO: Enable this
   # ('div', '/'),
   ]
 

@@ -257,19 +257,31 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
       codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
       switch (op->getOpcode()) {
         case llvm::Instruction::Add: {
+          // %ecx += %eax
           char code[2] = { 0x01, 0xc1 }; // addl %eax, %ecx
           codebuf.put_code(code, sizeof(code));
+          codebuf.spill(REG_ECX, inst);
           break;
         }
         case llvm::Instruction::Sub: {
+          // %ecx -= %eax
           char code[2] = { 0x29, 0xc1 }; // subl %eax, %ecx
           codebuf.put_code(code, sizeof(code));
+          codebuf.spill(REG_ECX, inst);
+          break;
+        }
+        case llvm::Instruction::Mul: {
+          // result = %eax * %ecx
+          // %eax = (uint32_t) result
+          // %edx = (uint32_t) (result >> 32) -- we ignore this
+          char code[2] = { 0xf7, 0xe1 }; // mull %ecx
+          codebuf.put_code(code, sizeof(code));
+          codebuf.spill(REG_EAX, inst);
           break;
         }
         default:
           assert(!"Unknown binary operator");
       }
-      codebuf.spill(REG_ECX, inst);
     } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
       codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
       codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
