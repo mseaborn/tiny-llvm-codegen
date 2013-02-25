@@ -279,21 +279,31 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
           codebuf.spill(REG_EAX, inst);
           break;
         }
-        case llvm::Instruction::UDiv: {
+        case llvm::Instruction::UDiv:
+        case llvm::Instruction::URem: {
           codebuf.put_code(TEMPL("\x31\xd2")); // xorl %edx, %edx
           // %eax = ((%edx << 32) | %eax) / %ecx
           char code[2] = { 0xf7, 0xf1 }; // divl %ecx
           codebuf.put_code(code, sizeof(code));
-          codebuf.spill(REG_EAX, inst);
+          if (op->getOpcode() == llvm::Instruction::UDiv) {
+            codebuf.spill(REG_EAX, inst);
+          } else {
+            codebuf.spill(REG_EDX, inst);
+          }
           break;
         }
-        case llvm::Instruction::SDiv: {
+        case llvm::Instruction::SDiv:
+        case llvm::Instruction::SRem: {
           // Fill %edx with sign bit of %eax
           codebuf.put_code(TEMPL("\x99")); // cltd (cdq in Intel syntax)
           // %eax = ((%edx << 32) | %eax) / %ecx
           char code[2] = { 0xf7, 0xf9 }; // idivl %ecx
           codebuf.put_code(code, sizeof(code));
-          codebuf.spill(REG_EAX, inst);
+          if (op->getOpcode() == llvm::Instruction::SDiv) {
+            codebuf.spill(REG_EAX, inst);
+          } else {
+            codebuf.spill(REG_EDX, inst);
+          }
           break;
         }
         default:
