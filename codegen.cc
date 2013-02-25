@@ -49,6 +49,17 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
   }
 }
 
+enum X86ArithOpcode {
+  X86ArithAdd = 0,
+  X86ArithOr,
+  X86ArithAdc,
+  X86ArithSbb,
+  X86ArithAnd,
+  X86ArithSub,
+  X86ArithXor,
+  X86ArithCmp,
+};
+
 class CodeBuf {
   char *buf_;
   char *current_;
@@ -137,6 +148,16 @@ public:
 
   void put_ret() {
     put_byte(0xc3);
+  }
+
+  void put_modrm_reg_reg(int reg1, int reg2) {
+    put_byte((3 << 6) | (reg2 << 3) | reg1);
+  }
+
+  void put_arith_reg_reg(X86ArithOpcode arith_opcode,
+                         int dest_reg, int src_reg) {
+    put_byte((arith_opcode << 3) | (0 << 1) | 1); // Opcode
+    put_modrm_reg_reg(dest_reg, src_reg);
   }
 
   void make_label(llvm::BasicBlock *bb) {
@@ -304,6 +325,11 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
           } else {
             codebuf.spill(REG_EDX, inst);
           }
+          break;
+        }
+        case llvm::Instruction::And: {
+          codebuf.put_arith_reg_reg(X86ArithAnd, REG_EAX, REG_ECX);
+          codebuf.spill(REG_EAX, inst);
           break;
         }
         default:
