@@ -530,14 +530,14 @@ int sub_func(int x, int y) {
     func = (typeof(func)) (globals[name]); \
     assert(func);
 
-int main() {
+void test_features() {
   llvm::SMDiagnostic err;
   llvm::LLVMContext &context = llvm::getGlobalContext();
   const char *filename = "test.ll";
   llvm::Module *module = llvm::ParseIRFile(filename, err, context);
   if (!module) {
     fprintf(stderr, "failed to read file: %s\n", filename);
-    return 1;
+    assert(0);
   }
 
   std::map<std::string,uintptr_t> globals;
@@ -647,7 +647,10 @@ int main() {
     GET_FUNC(funcp, "test_alloca2");
     ASSERT_EQ(funcp(), 125);
   }
+}
 
+int main() {
+  test_features();
   printf("OK\n");
   return 0;
 }
