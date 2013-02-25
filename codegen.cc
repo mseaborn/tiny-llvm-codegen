@@ -278,16 +278,12 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
       codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
       switch (op->getOpcode()) {
         case llvm::Instruction::Add: {
-          // %eax += %ecx
-          char code[2] = { 0x01, 0xc8 }; // addl %ecx, %eax
-          codebuf.put_code(code, sizeof(code));
+          codebuf.put_arith_reg_reg(X86ArithAdd, REG_EAX, REG_ECX);
           codebuf.spill(REG_EAX, inst);
           break;
         }
         case llvm::Instruction::Sub: {
-          // %eax -= %ecx
-          char code[2] = { 0x29, 0xc8 }; // subl %ecx, %eax
-          codebuf.put_code(code, sizeof(code));
+          codebuf.put_arith_reg_reg(X86ArithSub, REG_EAX, REG_ECX);
           codebuf.spill(REG_EAX, inst);
           break;
         }
