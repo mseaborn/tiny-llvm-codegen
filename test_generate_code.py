@@ -1,15 +1,20 @@
 
 OPERATORS = [
+  # Arithmetic
   ('add', '+'),
   ('sub', '-'),
   ('mul', '*'),
   ('div', '/'),
   ('rem', '%'),
+  # Bitwise operations
   ('and', '&'),
   ('or', '|'),
   ('xor', '^'),
   ('shift_left', '<<'),
   ('shift_right', '>>'),
+  # Comparisons
+  ('eq', '=='),
+  ('ne', '!='),
   ]
 
 

@@ -369,19 +369,27 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
     } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
       codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
       codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
+      int x86_cond;
       switch (op->getPredicate()) {
         case llvm::CmpInst::ICMP_EQ:
-          // XXX: we zero-extend first here
-          codebuf.put_code("\x31\xd2", 2); // xor %edx, %edx
-          // cmp %eax, %ecx
-          codebuf.put_byte(0x39);
-          codebuf.put_byte(0xc1);
-          // XXX: could store directly in stack slot
-          codebuf.put_code("\x0f\x94\xc2", 3); // sete %dl
+          x86_cond = 4; // 'e' (equal)
+          break;
+        case llvm::CmpInst::ICMP_NE:
+          x86_cond = 5; // 'ne' (not equal)
           break;
         default:
           assert(!"Unknown comparison");
       }
+      // XXX: we zero-extend first here
+      codebuf.put_code("\x31\xd2", 2); // xor %edx, %edx
+      // cmp %eax, %ecx
+      codebuf.put_byte(0x39);
+      codebuf.put_byte(0xc1);
+      // XXX: could store directly in stack slot
+      // setCC %dl
+      codebuf.put_byte(0x0f);
+      codebuf.put_byte(0x90 | x86_cond);
+      codebuf.put_byte(0xc2);
       codebuf.spill(REG_EDX, inst);
     } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
       codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
@@ -429,6 +437,9 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
     } else if (llvm::dyn_cast<llvm::BitCastInst>(inst)) {
       // Nothing to do: already handled by having aliasing in
       // stackslots.
+    } else if (llvm::dyn_cast<llvm::ZExtInst>(inst)) {
+      // TODO: ZExtInst should do something.  For now we use stackslot
+      // aliasing.
     } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
       // We have already reserved space on the stack to store our
       // callee's argument.
@@ -577,7 +588,9 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
            inst != bb->end();
            ++inst) {
         assert(codebuf.stackslots.count(inst) == 0);
-        if (llvm::dyn_cast<llvm::BitCastInst>(inst)) {
+        if (llvm::dyn_cast<llvm::BitCastInst>(inst) ||
+            // XXX: ZExtInst should not alias
+            llvm::dyn_cast<llvm::ZExtInst>(inst)) {
           // Bitcast is a no-op: just reuse the same stack slot.
           llvm::Value *op = inst->getOperand(0);
           assert(codebuf.stackslots.count(op) == 1);
@@ -803,6 +816,8 @@ void test_arithmetic() {
       { -7, -3 },
       { 7, -3 },
       { -7, 3 },
+      // For testing comparisons.
+      { 123, 123 }, // equal
     };
     for (unsigned j = 0; j < ARRAY_SIZE(test_args); ++j) {
       uint32_t arg1 = test_args[j][0];
