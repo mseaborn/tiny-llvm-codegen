@@ -266,6 +266,16 @@ int get_args_stack_size(llvm::CallInst *call) {
   return call->getNumArgOperands() * 4;
 }
 
+const char *get_instruction_type(llvm::Instruction *inst) {
+  switch (inst->getOpcode()) {
+#define HANDLE_INST(NUM, OPCODE, CLASS) \
+    case llvm::Instruction::OPCODE: return #OPCODE;
+#include "llvm/Instruction.def"
+#undef HANDLE_INST
+    default: return "<unknown-instruction>";
+  }
+}
+
 void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
                   llvm::TargetData &data_layout) {
   codebuf.make_label(bb);
@@ -449,7 +459,9 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
         codebuf.spill(REG_ESP, op);
       }
     } else {
-      assert(!"Unknown instruction type");
+      fprintf(stderr, "Unknown instruction type: %s\n",
+              get_instruction_type(inst));
+      assert(0);
     }
   }
 }
