@@ -367,15 +367,21 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
           assert(!"Unknown binary operator");
       }
     } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
-      codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
-      codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
+      codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
+      codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
       int x86_cond;
       switch (op->getPredicate()) {
         case llvm::CmpInst::ICMP_EQ:
-          x86_cond = 4; // 'e' (equal)
+          x86_cond = 0x4; // 'e' (equal)
           break;
         case llvm::CmpInst::ICMP_NE:
-          x86_cond = 5; // 'ne' (not equal)
+          x86_cond = 0x5; // 'ne' (not equal)
+          break;
+        case llvm::CmpInst::ICMP_UGT:
+          x86_cond = 0x7; // 'a' (above)
+          break;
+        case llvm::CmpInst::ICMP_SGT:
+          x86_cond = 0xf; // 'g' (greater)
           break;
         default:
           assert(!"Unknown comparison");
@@ -833,6 +839,9 @@ void test_arithmetic() {
 }
 
 int main() {
+  // Turn off stdout buffering to aid debugging.
+  setvbuf(stdout, NULL, _IONBF, 0);
+
   test_features();
   test_arithmetic();
 

@@ -15,6 +15,7 @@ OPERATORS = [
   # Comparisons
   ('eq', '=='),
   ('ne', '!='),
+  ('gt', '>'),
   ]
 
 
