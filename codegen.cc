@@ -343,6 +343,16 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
           codebuf.spill(REG_EAX, inst);
           break;
         }
+        case llvm::Instruction::LShr: {
+          codebuf.put_code(TEMPL("\xd3\xe8")); // shr %cl, %eax
+          codebuf.spill(REG_EAX, inst);
+          break;
+        }
+        case llvm::Instruction::AShr: {
+          codebuf.put_code(TEMPL("\xd3\xf8")); // sar %cl, %eax
+          codebuf.spill(REG_EAX, inst);
+          break;
+        }
         default:
           assert(!"Unknown binary operator");
       }
