@@ -338,6 +338,11 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
           codebuf.spill(REG_EAX, inst);
           break;
         }
+        case llvm::Instruction::Shl: {
+          codebuf.put_code(TEMPL("\xd3\xe0")); // shl %cl, %eax
+          codebuf.spill(REG_EAX, inst);
+          break;
+        }
         default:
           assert(!"Unknown binary operator");
       }

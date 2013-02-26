@@ -8,6 +8,7 @@ OPERATORS = [
   ('and', '&'),
   ('or', '|'),
   ('xor', '^'),
+  ('shift_left', '<<'),
   ]
 
 
