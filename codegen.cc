@@ -328,6 +328,16 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
           codebuf.spill(REG_EAX, inst);
           break;
         }
+        case llvm::Instruction::Or: {
+          codebuf.put_arith_reg_reg(X86ArithOr, REG_EAX, REG_ECX);
+          codebuf.spill(REG_EAX, inst);
+          break;
+        }
+        case llvm::Instruction::Xor: {
+          codebuf.put_arith_reg_reg(X86ArithXor, REG_EAX, REG_ECX);
+          codebuf.spill(REG_EAX, inst);
+          break;
+        }
         default:
           assert(!"Unknown binary operator");
       }
