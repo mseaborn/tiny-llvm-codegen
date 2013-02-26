@@ -380,8 +380,14 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
         case llvm::CmpInst::ICMP_UGT:
           x86_cond = 0x7; // 'a' (above)
           break;
+        case llvm::CmpInst::ICMP_UGE:
+          x86_cond = 0x3; // 'ae' (above or equal)
+          break;
         case llvm::CmpInst::ICMP_SGT:
           x86_cond = 0xf; // 'g' (greater)
+          break;
+        case llvm::CmpInst::ICMP_SGE:
+          x86_cond = 0xd; // 'ge' (greater or equal)
           break;
         default:
           assert(!"Unknown comparison");
