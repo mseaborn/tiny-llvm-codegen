@@ -377,17 +377,31 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
         case llvm::CmpInst::ICMP_NE:
           x86_cond = 0x5; // 'ne' (not equal)
           break;
+        // Unsigned comparisons
         case llvm::CmpInst::ICMP_UGT:
           x86_cond = 0x7; // 'a' (above)
           break;
         case llvm::CmpInst::ICMP_UGE:
           x86_cond = 0x3; // 'ae' (above or equal)
           break;
+        case llvm::CmpInst::ICMP_ULT:
+          x86_cond = 0x2; // 'b' (below)
+          break;
+        case llvm::CmpInst::ICMP_ULE:
+          x86_cond = 0x6; // 'be' (below or equal)
+          break;
+        // Signed comparisons
         case llvm::CmpInst::ICMP_SGT:
           x86_cond = 0xf; // 'g' (greater)
           break;
         case llvm::CmpInst::ICMP_SGE:
           x86_cond = 0xd; // 'ge' (greater or equal)
+          break;
+        case llvm::CmpInst::ICMP_SLT:
+          x86_cond = 0xc; // 'l' (less)
+          break;
+        case llvm::CmpInst::ICMP_SLE:
+          x86_cond = 0xe; // 'le' (less or equal)
           break;
         default:
           assert(!"Unknown comparison");
