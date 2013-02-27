@@ -172,6 +172,37 @@ public:
     put_modrm_reg_reg(dest_reg, src_reg);
   }
 
+  void extend_to_i32(int reg, bool sign_extend, int src_size) {
+    if (src_size == 32)
+      return;
+    if (src_size == 1 && !sign_extend) {
+      // andl $1, %reg
+      put_byte(0x83);
+      put_byte(0xe0 | reg);
+      put_byte(0x01);
+      return;
+    }
+    assert(src_size == 8 || src_size == 16);
+
+    put_byte(0x0f); // First opcode
+    if (sign_extend) {
+      // movsx (in Intel syntax)
+      if (src_size == 8) {
+        put_byte(0xbe);
+      } else {
+        put_byte(0xbf);
+      }
+    } else {
+      // movzx (in Intel syntax)
+      if (src_size == 8) {
+        put_byte(0xb6);
+      } else {
+        put_byte(0xb7);
+      }
+    }
+    put_modrm_reg_reg(reg, reg);
+  }
+
   void make_label(llvm::BasicBlock *bb) {
     assert(labels.count(bb) == 0);
     labels[bb] = (uint32_t) current_;
@@ -472,12 +503,17 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
       // Nothing to do: phi nodes are handled by branches.
       // XXX: Someone still needs to validate that phi nodes only
       // appear in the right places.
-    } else if (llvm::dyn_cast<llvm::BitCastInst>(inst)) {
+    } else if (llvm::dyn_cast<llvm::BitCastInst>(inst) ||
+               llvm::dyn_cast<llvm::TruncInst>(inst)) {
       // Nothing to do: already handled by having aliasing in
       // stackslots.
-    } else if (llvm::dyn_cast<llvm::ZExtInst>(inst)) {
-      // TODO: ZExtInst should do something.  For now we use stackslot
-      // aliasing.
+    } else if (llvm::ZExtInst *op = llvm::dyn_cast<llvm::ZExtInst>(inst)) {
+      llvm::Value *arg = op->getOperand(0);
+      llvm::IntegerType *from_type =
+        llvm::cast<llvm::IntegerType>(arg->getType());
+      codebuf.move_to_reg(REG_EAX, arg);
+      codebuf.extend_to_i32(REG_EAX, false, from_type->getBitWidth());
+      codebuf.spill(REG_EAX, op);
     } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
       // We have already reserved space on the stack to store our
       // callee's argument.
@@ -628,8 +664,7 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
            ++inst) {
         assert(codebuf.stackslots.count(inst) == 0);
         if (llvm::dyn_cast<llvm::BitCastInst>(inst) ||
-            // XXX: ZExtInst should not alias
-            llvm::dyn_cast<llvm::ZExtInst>(inst)) {
+            llvm::dyn_cast<llvm::TruncInst>(inst)) {
           // Bitcast is a no-op: just reuse the same stack slot.
           llvm::Value *op = inst->getOperand(0);
           assert(codebuf.stackslots.count(op) == 1);

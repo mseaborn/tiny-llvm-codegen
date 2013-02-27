@@ -10,8 +10,10 @@
 
 void my_assert(int val1, int val2, const char *expr1, const char *expr2,
                const char *file, int line_number) {
-  fprintf(stderr, "%i != %i: %s != %s at %s:%i\n",
-          val1, val2, expr1, expr2, file, line_number);
+  fprintf(stderr, "%i != %i (0x%x != 0x%x): %s != %s at %s:%i\n",
+          val1, val2,
+          val1, val2,
+          expr1, expr2, file, line_number);
   abort();
 }
 
@@ -230,6 +232,19 @@ void test_features() {
     int *(*funcp)(char *arg);
     GET_FUNC(funcp, "test_bitcast");
     assert(funcp((char *) 0x12345678) == (int *) 0x12345678);
+  }
+
+  {
+    uint32_t (*funcp)(uint32_t arg);
+    GET_FUNC(funcp, "test_zext16");
+    ASSERT_EQ(funcp(0x81828384), 0x8384);
+
+    GET_FUNC(funcp, "test_zext8");
+    ASSERT_EQ(funcp(0x81828384), 0x84);
+
+    GET_FUNC(funcp, "test_zext1");
+    ASSERT_EQ(funcp(0x81828384), 0);
+    ASSERT_EQ(funcp(0x81828385), 1);
   }
 }
 
