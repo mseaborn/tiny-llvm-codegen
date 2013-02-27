@@ -175,11 +175,22 @@ public:
   void extend_to_i32(int reg, bool sign_extend, int src_size) {
     if (src_size == 32)
       return;
-    if (src_size == 1 && !sign_extend) {
-      // andl $1, %reg
-      put_byte(0x83);
-      put_byte(0xe0 | reg);
-      put_byte(0x01);
+    if (src_size == 1) {
+      if (sign_extend) {
+        // shll $31, %reg
+        put_byte(0xc1);
+        put_byte(0xe0 | reg);
+        put_byte(0x1f);
+        // sarl $31, %reg
+        put_byte(0xc1);
+        put_byte(0xf8 | reg);
+        put_byte(0x1f);
+      } else {
+        // andl $1, %reg
+        put_byte(0x83);
+        put_byte(0xe0 | reg);
+        put_byte(0x01);
+      }
       return;
     }
     assert(src_size == 8 || src_size == 16);
@@ -507,13 +518,15 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
                llvm::dyn_cast<llvm::TruncInst>(inst)) {
       // Nothing to do: already handled by having aliasing in
       // stackslots.
-    } else if (llvm::ZExtInst *op = llvm::dyn_cast<llvm::ZExtInst>(inst)) {
-      llvm::Value *arg = op->getOperand(0);
+    } else if (llvm::dyn_cast<llvm::ZExtInst>(inst) ||
+               llvm::dyn_cast<llvm::SExtInst>(inst)) {
+      llvm::Value *arg = inst->getOperand(0);
       llvm::IntegerType *from_type =
         llvm::cast<llvm::IntegerType>(arg->getType());
+      bool sign_extend = llvm::dyn_cast<llvm::SExtInst>(inst);
       codebuf.move_to_reg(REG_EAX, arg);
-      codebuf.extend_to_i32(REG_EAX, false, from_type->getBitWidth());
-      codebuf.spill(REG_EAX, op);
+      codebuf.extend_to_i32(REG_EAX, sign_extend, from_type->getBitWidth());
+      codebuf.spill(REG_EAX, inst);
     } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
       // We have already reserved space on the stack to store our
       // callee's argument.

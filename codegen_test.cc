@@ -236,6 +236,8 @@ void test_features() {
 
   {
     uint32_t (*funcp)(uint32_t arg);
+
+    // Zero-extension
     GET_FUNC(funcp, "test_zext16");
     ASSERT_EQ(funcp(0x81828384), 0x8384);
 
@@ -245,6 +247,17 @@ void test_features() {
     GET_FUNC(funcp, "test_zext1");
     ASSERT_EQ(funcp(0x81828384), 0);
     ASSERT_EQ(funcp(0x81828385), 1);
+
+    // Sign-extension
+    GET_FUNC(funcp, "test_sext16");
+    ASSERT_EQ(funcp(0x81828384), 0xffff8384);
+
+    GET_FUNC(funcp, "test_sext8");
+    ASSERT_EQ(funcp(0x81828384), 0xffffff84);
+
+    GET_FUNC(funcp, "test_sext1");
+    ASSERT_EQ(funcp(0x81828384), 0);
+    ASSERT_EQ(funcp(0x81828385), 0xffffffff);
   }
 }
 

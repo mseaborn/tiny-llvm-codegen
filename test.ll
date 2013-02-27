@@ -145,6 +145,7 @@ define i32* @test_bitcast(i8* %arg) {
 }
 
 ; TODO: Generate all these variants
+; Zero-extension
 define i32 @test_zext16(i32 %arg) {
   %1 = trunc i32 %arg to i16
   %2 = zext i16 %1 to i32
@@ -158,5 +159,21 @@ define i32 @test_zext8(i32 %arg) {
 define i32 @test_zext1(i32 %arg) {
   %1 = trunc i32 %arg to i1
   %2 = zext i1 %1 to i32
+  ret i32 %2
+}
+; Sign-extension
+define i32 @test_sext16(i32 %arg) {
+  %1 = trunc i32 %arg to i16
+  %2 = sext i16 %1 to i32
+  ret i32 %2
+}
+define i32 @test_sext8(i32 %arg) {
+  %1 = trunc i32 %arg to i8
+  %2 = sext i8 %1 to i32
+  ret i32 %2
+}
+define i32 @test_sext1(i32 %arg) {
+  %1 = trunc i32 %arg to i1
+  %2 = sext i1 %1 to i32
   ret i32 %2
 }
