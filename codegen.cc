@@ -505,6 +505,7 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
         codebuf.put_uint32(codebuf.frame_callees_args_size);
         codebuf.spill(REG_EAX, op);
       } else {
+        // Optimization.
         codebuf.spill(REG_ESP, op);
       }
     } else {
