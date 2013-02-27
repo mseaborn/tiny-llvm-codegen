@@ -148,6 +148,20 @@ public:
     put_byte(0xc3);
   }
 
+  void put_sized_opcode(llvm::Type *type, int opcode_base) {
+    llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(type);
+    int bits = inttype->getBitWidth();
+    assert(bits == 8 || bits == 16 || bits == 32);
+    if (bits == 16) {
+      put_byte(0x66); // DATA16 prefix
+    }
+    if (bits == 8) {
+      put_byte(opcode_base);
+    } else {
+      put_byte(opcode_base + 1);
+    }
+  }
+
   void put_modrm_reg_reg(int reg1, int reg2) {
     put_byte((3 << 6) | (reg2 << 3) | reg1);
   }
@@ -417,26 +431,15 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
       codebuf.spill(REG_EDX, inst);
     } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
       codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
-      // movl (%eax), %eax
-      codebuf.put_byte(0x8b);
+      // mov<size> (%eax), %eax
+      codebuf.put_sized_opcode(op->getType(), 0x8a);
       codebuf.put_byte(0x00);
       codebuf.spill(REG_EAX, inst);
     } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
       codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
       codebuf.move_to_reg(REG_ECX, op->getValueOperand());
-      llvm::IntegerType *type =
-        llvm::cast<llvm::IntegerType>(op->getValueOperand()->getType());
-      int bits = type->getBitWidth();
-      assert(bits == 8 || bits == 16 || bits == 32);
       // mov<size> %ecx, (%eax)
-      if (bits == 16) {
-        codebuf.put_byte(0x66); // DATA16 prefix
-      }
-      if (bits == 8) {
-        codebuf.put_byte(0x88);
-      } else {
-        codebuf.put_byte(0x89);
-      }
+      codebuf.put_sized_opcode(op->getValueOperand()->getType(), 0x88);
       codebuf.put_byte(0x08);
       codebuf.spill(REG_EAX, inst);
     } else if (llvm::ReturnInst *op

@@ -20,6 +20,14 @@ define i32 @test_load_int32(i32* nocapture %ptr) nounwind readonly {
   %1 = load i32* %ptr, align 4
   ret i32 %1
 }
+define i16 @test_load_int16(i16* nocapture %ptr) nounwind readonly {
+  %1 = load i16* %ptr, align 4
+  ret i16 %1
+}
+define i8 @test_load_int8(i8* nocapture %ptr) nounwind readonly {
+  %1 = load i8* %ptr, align 4
+  ret i8 %1
+}
 
 define void @test_store_int32(i32* nocapture %ptr, i32 %value) nounwind {
   store i32 %value, i32* %ptr, align 4

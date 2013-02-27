@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+#include <sys/mman.h>
 
 #include <llvm/LLVMContext.h>
 #include <llvm/Support/IRReader.h>
@@ -32,6 +33,36 @@ int sub_func(int x, int y) {
     func = (typeof(func)) (globals[name]); \
     assert(func);
 
+// We use this to check whether a memory read is of the correct size.
+// If it is too big, it will cross a page boundary and fault.
+class PageBoundary {
+ public:
+  PageBoundary() {
+    addr_ = mmap(NULL, page_size * 2, PROT_READ | PROT_WRITE,
+                 MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    assert(addr_ != MAP_FAILED);
+    // Change the second page to be PROT_NONE.  We use
+    // mmap()+MAP_FIXED rather than mprotect() because NaCl does not
+    // support mprotect() yet.
+    void *addr2 = mmap(get_boundary(), page_size, PROT_NONE,
+                       MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED, -1, 0);
+    assert(addr2 == get_boundary());
+  }
+
+  ~PageBoundary() {
+    int rc = munmap(addr_, page_size * 2);
+    assert(rc == 0);
+  }
+
+  void *get_boundary() {
+    return (char *) addr_ + page_size;
+  }
+
+ private:
+  static const int page_size = 0x10000; // NaCl-compatible
+  void *addr_;
+};
+
 void test_features() {
   llvm::SMDiagnostic err;
   llvm::LLVMContext &context = llvm::getGlobalContext();
@@ -57,11 +88,29 @@ void test_features() {
   assert(func(200) == 800);
 
   {
-    int (*funcp)(int *ptr);
+    uint32_t (*funcp)(int *ptr);
     GET_FUNC(funcp, "test_load_int32");
     int value = 0x12345678;
     int cell = value;
     assert(funcp(&cell) == value);
+  }
+
+  {
+    uint16_t (*funcp)(uint16_t *ptr);
+    GET_FUNC(funcp, "test_load_int16");
+    PageBoundary alloc;
+    uint16_t *ptr = ((uint16_t *) alloc.get_boundary()) - 1;
+    *ptr = 0x1234;
+    ASSERT_EQ(funcp(ptr), 0x1234);
+  }
+
+  {
+    uint8_t (*funcp)(uint8_t *ptr);
+    GET_FUNC(funcp, "test_load_int8");
+    PageBoundary alloc;
+    uint8_t *ptr = ((uint8_t *) alloc.get_boundary()) - 1;
+    *ptr = 0x12;
+    ASSERT_EQ(funcp(ptr), 0x12);
   }
 
   {
