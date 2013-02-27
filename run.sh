@@ -17,8 +17,9 @@ gcc -O1 -m32 -c gen_arithmetic_test.c
 clang -O1 -m32 -c gen_arithmetic_test.c -emit-llvm -o gen_arithmetic_test.ll
 
 g++ -m32 $cflags -c codegen.cc
-g++ -m32 codegen.o gen_arithmetic_test.o \
+g++ -m32 $cflags -c codegen_test.cc
+g++ -m32 codegen.o codegen_test.o gen_arithmetic_test.o \
   $(llvm-config-3.0 --ldflags --libs) -ldl \
-  -Wall -o codegen
+  -Wall -o codegen_test
 
-./codegen
+./codegen_test
