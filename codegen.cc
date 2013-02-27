@@ -424,8 +424,19 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
     } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
       codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
       codebuf.move_to_reg(REG_ECX, op->getValueOperand());
-      // movl %ecx, (%eax)
-      codebuf.put_byte(0x89);
+      llvm::IntegerType *type =
+        llvm::cast<llvm::IntegerType>(op->getValueOperand()->getType());
+      int bits = type->getBitWidth();
+      assert(bits == 8 || bits == 16 || bits == 32);
+      // mov<size> %ecx, (%eax)
+      if (bits == 16) {
+        codebuf.put_byte(0x66); // DATA16 prefix
+      }
+      if (bits == 8) {
+        codebuf.put_byte(0x88);
+      } else {
+        codebuf.put_byte(0x89);
+      }
       codebuf.put_byte(0x08);
       codebuf.spill(REG_EAX, inst);
     } else if (llvm::ReturnInst *op

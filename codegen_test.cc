@@ -65,12 +65,35 @@ void test_features() {
   }
 
   {
-    void (*funcp)(int *ptr, int value);
+    void (*funcp)(int *ptr, uint32_t value);
     GET_FUNC(funcp, "test_store_int32");
     int value = 0x12345678;
     int cell = 0;
     funcp(&cell, value);
     assert(cell == value);
+  }
+
+  {
+    void (*funcp)(void *ptr, uint16_t value);
+    GET_FUNC(funcp, "test_store_int16");
+    char mem[] = { 1, 2, 3, 4 };
+    int value = 0x1234;
+    funcp(mem, value);
+    assert(*(uint16_t *) mem == value);
+    assert(mem[2] == 3);
+    assert(mem[3] == 4);
+  }
+
+  {
+    void (*funcp)(void *ptr, uint8_t value);
+    GET_FUNC(funcp, "test_store_int8");
+    char mem[] = { 1, 2, 3, 4 };
+    int value = 0x12;
+    funcp(mem, value);
+    assert(*(uint8_t *) mem == value);
+    assert(mem[1] == 2);
+    assert(mem[2] == 3);
+    assert(mem[3] == 4);
   }
 
   GET_FUNC(func, "test_compare");
