@@ -66,7 +66,7 @@ class CodeBuf {
 public:
   CodeBuf() {
     // TODO: Use an expandable buffer
-    int size = 0x1000;
+    int size = 0x2000;
     buf_ = (char *) mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
                          MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     assert(buf_ != MAP_FAILED);
@@ -346,6 +346,9 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
        ++inst) {
     if (llvm::BinaryOperator *op =
         llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
+      llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
+      int bits = inttype->getBitWidth();
+
       codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
       codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
       switch (op->getOpcode()) {
@@ -370,6 +373,8 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
         }
         case llvm::Instruction::UDiv:
         case llvm::Instruction::URem: {
+          codebuf.extend_to_i32(REG_EAX, false, bits);
+          codebuf.extend_to_i32(REG_ECX, false, bits);
           codebuf.put_code(TEMPL("\x31\xd2")); // xorl %edx, %edx
           // %eax = ((%edx << 32) | %eax) / %ecx
           char code[2] = { 0xf7, 0xf1 }; // divl %ecx
@@ -383,6 +388,8 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
         }
         case llvm::Instruction::SDiv:
         case llvm::Instruction::SRem: {
+          // TODO: This should extend args first, but this needs a test.
+          assert(bits == 32);
           // Fill %edx with sign bit of %eax
           codebuf.put_code(TEMPL("\x99")); // cltd (cdq in Intel syntax)
           // %eax = ((%edx << 32) | %eax) / %ecx
@@ -416,11 +423,15 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
           break;
         }
         case llvm::Instruction::LShr: {
+          // TODO: This should extend args first, but this needs a test.
+          assert(bits == 32);
           codebuf.put_code(TEMPL("\xd3\xe8")); // shr %cl, %eax
           codebuf.spill(REG_EAX, inst);
           break;
         }
         case llvm::Instruction::AShr: {
+          // TODO: This should extend args first, but this needs a test.
+          assert(bits == 32);
           codebuf.put_code(TEMPL("\xd3\xf8")); // sar %cl, %eax
           codebuf.spill(REG_EAX, inst);
           break;
@@ -429,8 +440,14 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
           assert(!"Unknown binary operator");
       }
     } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
+      llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(
+          op->getOperand(0)->getType());
+      int bits = inttype->getBitWidth();
+
       codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
       codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
+      codebuf.extend_to_i32(REG_EAX, op->isSigned(), bits);
+      codebuf.extend_to_i32(REG_ECX, op->isSigned(), bits);
       int x86_cond;
       switch (op->getPredicate()) {
         case llvm::CmpInst::ICMP_EQ:
