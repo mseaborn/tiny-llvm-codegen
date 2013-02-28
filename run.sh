@@ -10,7 +10,7 @@ cflags="$(
       *) echo $flag;;
     esac
   done)"
-cflags="$cflags -UNDEBUG"
+cflags="$cflags -UNDEBUG -Wall"
 
 python test_generate_code.py > gen_arithmetic_test.c
 gcc -O1 -m32 -c gen_arithmetic_test.c
@@ -20,6 +20,6 @@ g++ -m32 $cflags -c codegen.cc
 g++ -m32 $cflags -c codegen_test.cc
 g++ -m32 codegen.o codegen_test.o gen_arithmetic_test.o \
   $(llvm-config-3.0 --ldflags --libs) -ldl \
-  -Wall -o codegen_test
+  -o codegen_test
 
 ./codegen_test
