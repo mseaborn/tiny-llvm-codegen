@@ -338,8 +338,7 @@ const char *get_instruction_type(llvm::Instruction *inst) {
   }
 }
 
-void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf,
-                           llvm::TargetData &data_layout) {
+void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
   if (llvm::BinaryOperator *op =
       llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
     llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
@@ -565,7 +564,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf,
     // XXX: Handle alignment
     // XXX: Handle variable sizes
     assert(!op->isArrayAllocation());
-    int size = data_layout.getTypeAllocSize(op->getAllocatedType());
+    int size = codebuf.data_layout->getTypeAllocSize(op->getAllocatedType());
     // subl $size, %esp
     codebuf.put_byte(0x81);
     codebuf.put_byte(0xec);
@@ -586,13 +585,12 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf,
   }
 }
 
-void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
-                  llvm::TargetData &data_layout) {
+void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
   codebuf.make_label(bb);
   for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
        inst != bb->end();
        ++inst) {
-    translate_instruction(inst, codebuf, data_layout);
+    translate_instruction(inst, codebuf);
   }
 }
 
@@ -649,6 +647,77 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
   }
 }
 
+void translate_function(llvm::Function *func, CodeBuf &codebuf) {
+  int callees_args_size = 0;
+  for (llvm::Function::iterator bb = func->begin();
+       bb != func->end();
+       ++bb) {
+    for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
+         inst != bb->end();
+         ++inst) {
+      if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(inst)) {
+        callees_args_size =
+          std::max(callees_args_size, get_args_stack_size(call));
+      }
+    }
+  }
+  codebuf.frame_callees_args_size = callees_args_size;
+
+  for (llvm::Function::ArgumentListType::iterator arg = func->arg_begin();
+       arg != func->arg_end();
+       ++arg) {
+    // XXX: We assume arguments are int32s
+    int offset = 8; // Skip return address and frame pointer
+    assert(codebuf.stackslots.count(arg) == 0);
+    codebuf.stackslots[arg] = offset + arg->getArgNo() * 4;
+  }
+
+  int vars_size = 0;
+  for (llvm::Function::iterator bb = func->begin();
+       bb != func->end();
+       ++bb) {
+    for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
+         inst != bb->end();
+         ++inst) {
+      assert(codebuf.stackslots.count(inst) == 0);
+      if (llvm::dyn_cast<llvm::BitCastInst>(inst) ||
+          llvm::dyn_cast<llvm::TruncInst>(inst)) {
+        // Bitcast is a no-op: just reuse the same stack slot.
+        llvm::Value *op = inst->getOperand(0);
+        assert(codebuf.stackslots.count(op) == 1);
+        codebuf.stackslots[inst] = codebuf.stackslots[op];
+      } else {
+        // XXX: We assume variables are int32s
+        vars_size += 4;
+        codebuf.stackslots[inst] = -vars_size;
+      }
+    }
+  }
+  codebuf.frame_vars_size = vars_size;
+  int frame_size = codebuf.frame_vars_size + codebuf.frame_callees_args_size;
+
+  char *function_entry = codebuf.get_current_pos();
+  // Prolog:
+  codebuf.put_byte(0x55); // pushl %ebp
+  codebuf.put_code(TEMPL("\x89\xe5")); // movl %esp, %ebp
+  // subl $frame_size, %esp
+  codebuf.put_byte(0x81);
+  codebuf.put_byte(0xec);
+  codebuf.put_uint32(frame_size);
+
+  for (llvm::Function::iterator bb = func->begin();
+       bb != func->end();
+       ++bb) {
+    translate_bb(bb, codebuf);
+  }
+
+  printf("%s:\n", func->getName().data());
+  fflush(stdout);
+  dump_range_as_code(function_entry, codebuf.get_current_pos());
+
+  codebuf.globals[func] = (uintptr_t) function_entry;
+}
+
 void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
   CodeBuf codebuf;
   DataSegment dataseg;
@@ -675,74 +744,7 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
   for (llvm::Module::FunctionListType::iterator func = module->begin();
        func != module->end();
        ++func) {
-    int callees_args_size = 0;
-    for (llvm::Function::iterator bb = func->begin();
-         bb != func->end();
-         ++bb) {
-      for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
-           inst != bb->end();
-           ++inst) {
-        if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(inst)) {
-          callees_args_size =
-            std::max(callees_args_size, get_args_stack_size(call));
-        }
-      }
-    }
-    codebuf.frame_callees_args_size = callees_args_size;
-
-    for (llvm::Function::ArgumentListType::iterator arg = func->arg_begin();
-         arg != func->arg_end();
-         ++arg) {
-      // XXX: We assume arguments are int32s
-      int offset = 8; // Skip return address and frame pointer
-      assert(codebuf.stackslots.count(arg) == 0);
-      codebuf.stackslots[arg] = offset + arg->getArgNo() * 4;
-    }
-
-    int vars_size = 0;
-    for (llvm::Function::iterator bb = func->begin();
-         bb != func->end();
-         ++bb) {
-      for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
-           inst != bb->end();
-           ++inst) {
-        assert(codebuf.stackslots.count(inst) == 0);
-        if (llvm::dyn_cast<llvm::BitCastInst>(inst) ||
-            llvm::dyn_cast<llvm::TruncInst>(inst)) {
-          // Bitcast is a no-op: just reuse the same stack slot.
-          llvm::Value *op = inst->getOperand(0);
-          assert(codebuf.stackslots.count(op) == 1);
-          codebuf.stackslots[inst] = codebuf.stackslots[op];
-        } else {
-          // XXX: We assume variables are int32s
-          vars_size += 4;
-          codebuf.stackslots[inst] = -vars_size;
-        }
-      }
-    }
-    codebuf.frame_vars_size = vars_size;
-    int frame_size = codebuf.frame_vars_size + codebuf.frame_callees_args_size;
-
-    char *function_entry = codebuf.get_current_pos();
-    // Prolog:
-    codebuf.put_byte(0x55); // pushl %ebp
-    codebuf.put_code(TEMPL("\x89\xe5")); // movl %esp, %ebp
-    // subl $frame_size, %esp
-    codebuf.put_byte(0x81);
-    codebuf.put_byte(0xec);
-    codebuf.put_uint32(frame_size);
-
-    for (llvm::Function::iterator bb = func->begin();
-         bb != func->end();
-         ++bb) {
-      translate_bb(bb, codebuf, data_layout);
-    }
-
-    printf("%s:\n", func->getName().data());
-    fflush(stdout);
-    dump_range_as_code(function_entry, codebuf.get_current_pos());
-
-    codebuf.globals[func] = (uintptr_t) function_entry;
+    translate_function(func, codebuf);
   }
   codebuf.apply_jump_relocs();
   codebuf.apply_global_relocs();
