@@ -338,255 +338,261 @@ const char *get_instruction_type(llvm::Instruction *inst) {
   }
 }
 
+void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf,
+                           llvm::TargetData &data_layout) {
+  if (llvm::BinaryOperator *op =
+      llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
+    llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
+    int bits = inttype->getBitWidth();
+
+    codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
+    codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
+    switch (op->getOpcode()) {
+      case llvm::Instruction::Add: {
+        codebuf.put_arith_reg_reg(X86ArithAdd, REG_EAX, REG_ECX);
+        codebuf.spill(REG_EAX, inst);
+        break;
+      }
+      case llvm::Instruction::Sub: {
+        codebuf.put_arith_reg_reg(X86ArithSub, REG_EAX, REG_ECX);
+        codebuf.spill(REG_EAX, inst);
+        break;
+      }
+      case llvm::Instruction::Mul: {
+        // result = %eax * %ecx
+        // %eax = (uint32_t) result
+        // %edx = (uint32_t) (result >> 32) -- we ignore this
+        char code[2] = { 0xf7, 0xe1 }; // mull %ecx
+        codebuf.put_code(code, sizeof(code));
+        codebuf.spill(REG_EAX, inst);
+        break;
+      }
+      case llvm::Instruction::UDiv:
+      case llvm::Instruction::URem: {
+        codebuf.extend_to_i32(REG_EAX, false, bits);
+        codebuf.extend_to_i32(REG_ECX, false, bits);
+        codebuf.put_code(TEMPL("\x31\xd2")); // xorl %edx, %edx
+        // %eax = ((%edx << 32) | %eax) / %ecx
+        char code[2] = { 0xf7, 0xf1 }; // divl %ecx
+        codebuf.put_code(code, sizeof(code));
+        if (op->getOpcode() == llvm::Instruction::UDiv) {
+          codebuf.spill(REG_EAX, inst);
+        } else {
+          codebuf.spill(REG_EDX, inst);
+        }
+        break;
+      }
+      case llvm::Instruction::SDiv:
+      case llvm::Instruction::SRem: {
+        // TODO: This should extend args first, but this needs a test.
+        assert(bits == 32);
+        // Fill %edx with sign bit of %eax
+        codebuf.put_code(TEMPL("\x99")); // cltd (cdq in Intel syntax)
+        // %eax = ((%edx << 32) | %eax) / %ecx
+        char code[2] = { 0xf7, 0xf9 }; // idivl %ecx
+        codebuf.put_code(code, sizeof(code));
+        if (op->getOpcode() == llvm::Instruction::SDiv) {
+          codebuf.spill(REG_EAX, inst);
+        } else {
+          codebuf.spill(REG_EDX, inst);
+        }
+        break;
+      }
+      case llvm::Instruction::And: {
+        codebuf.put_arith_reg_reg(X86ArithAnd, REG_EAX, REG_ECX);
+        codebuf.spill(REG_EAX, inst);
+        break;
+      }
+      case llvm::Instruction::Or: {
+        codebuf.put_arith_reg_reg(X86ArithOr, REG_EAX, REG_ECX);
+        codebuf.spill(REG_EAX, inst);
+        break;
+      }
+      case llvm::Instruction::Xor: {
+        codebuf.put_arith_reg_reg(X86ArithXor, REG_EAX, REG_ECX);
+        codebuf.spill(REG_EAX, inst);
+        break;
+      }
+      case llvm::Instruction::Shl: {
+        codebuf.put_code(TEMPL("\xd3\xe0")); // shl %cl, %eax
+        codebuf.spill(REG_EAX, inst);
+        break;
+      }
+      case llvm::Instruction::LShr: {
+        // TODO: This should extend args first, but this needs a test.
+        assert(bits == 32);
+        codebuf.put_code(TEMPL("\xd3\xe8")); // shr %cl, %eax
+        codebuf.spill(REG_EAX, inst);
+        break;
+      }
+      case llvm::Instruction::AShr: {
+        // TODO: This should extend args first, but this needs a test.
+        assert(bits == 32);
+        codebuf.put_code(TEMPL("\xd3\xf8")); // sar %cl, %eax
+        codebuf.spill(REG_EAX, inst);
+        break;
+      }
+      default:
+        assert(!"Unknown binary operator");
+    }
+  } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
+    llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(
+        op->getOperand(0)->getType());
+    int bits = inttype->getBitWidth();
+
+    codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
+    codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
+    codebuf.extend_to_i32(REG_EAX, op->isSigned(), bits);
+    codebuf.extend_to_i32(REG_ECX, op->isSigned(), bits);
+    int x86_cond;
+    switch (op->getPredicate()) {
+      case llvm::CmpInst::ICMP_EQ:
+        x86_cond = 0x4; // 'e' (equal)
+        break;
+      case llvm::CmpInst::ICMP_NE:
+        x86_cond = 0x5; // 'ne' (not equal)
+        break;
+      // Unsigned comparisons
+      case llvm::CmpInst::ICMP_UGT:
+        x86_cond = 0x7; // 'a' (above)
+        break;
+      case llvm::CmpInst::ICMP_UGE:
+        x86_cond = 0x3; // 'ae' (above or equal)
+        break;
+      case llvm::CmpInst::ICMP_ULT:
+        x86_cond = 0x2; // 'b' (below)
+        break;
+      case llvm::CmpInst::ICMP_ULE:
+        x86_cond = 0x6; // 'be' (below or equal)
+        break;
+      // Signed comparisons
+      case llvm::CmpInst::ICMP_SGT:
+        x86_cond = 0xf; // 'g' (greater)
+        break;
+      case llvm::CmpInst::ICMP_SGE:
+        x86_cond = 0xd; // 'ge' (greater or equal)
+        break;
+      case llvm::CmpInst::ICMP_SLT:
+        x86_cond = 0xc; // 'l' (less)
+        break;
+      case llvm::CmpInst::ICMP_SLE:
+        x86_cond = 0xe; // 'le' (less or equal)
+        break;
+      default:
+        assert(!"Unknown comparison");
+    }
+    // XXX: we zero-extend first here
+    codebuf.put_code("\x31\xd2", 2); // xor %edx, %edx
+    // cmp %eax, %ecx
+    codebuf.put_byte(0x39);
+    codebuf.put_byte(0xc1);
+    // XXX: could store directly in stack slot
+    // setCC %dl
+    codebuf.put_byte(0x0f);
+    codebuf.put_byte(0x90 | x86_cond);
+    codebuf.put_byte(0xc2);
+    codebuf.spill(REG_EDX, inst);
+  } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
+    codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
+    // mov<size> (%eax), %eax
+    codebuf.put_sized_opcode(op->getType(), 0x8a);
+    codebuf.put_byte(0x00);
+    codebuf.spill(REG_EAX, inst);
+  } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
+    codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
+    codebuf.move_to_reg(REG_ECX, op->getValueOperand());
+    // mov<size> %ecx, (%eax)
+    codebuf.put_sized_opcode(op->getValueOperand()->getType(), 0x88);
+    codebuf.put_byte(0x08);
+    codebuf.spill(REG_EAX, inst);
+  } else if (llvm::ReturnInst *op
+             = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
+    if (llvm::Value *result = op->getReturnValue())
+      codebuf.move_to_reg(REG_EAX, result);
+    // Epilog:
+    codebuf.put_byte(0xc9); // leave
+    // Omit-frame-pointer version:
+    // // addl $frame_size, %esp
+    // codebuf.put_byte(0x81);
+    // codebuf.put_byte(0xc4);
+    // codebuf.put_uint32(codebuf.frame_size);
+    codebuf.put_ret();
+  } else if (llvm::BranchInst *op =
+             llvm::dyn_cast<llvm::BranchInst>(inst)) {
+    // TODO: could implement fallthrough to next basic block
+    llvm::BasicBlock *bb = inst->getParent();
+    if (op->isConditional()) {
+      codebuf.move_to_reg(REG_EAX, op->getCondition());
+      handle_phi_nodes(bb, op->getSuccessor(0), codebuf);
+      codebuf.put_code(TEMPL("\x85\xc0")); // testl %eax, %eax
+      codebuf.put_code(TEMPL("\x0f\x85")); // jnz <label> (32-bit)
+      codebuf.direct_jump_offset32(op->getSuccessor(0));
+      unconditional_jump(bb, op->getSuccessor(1), codebuf);
+    } else {
+      assert(op->isUnconditional());
+      unconditional_jump(bb, op->getSuccessor(0), codebuf);
+    }
+  } else if (llvm::PHINode *op = llvm::dyn_cast<llvm::PHINode>(inst)) {
+    // Nothing to do: phi nodes are handled by branches.
+    // XXX: Someone still needs to validate that phi nodes only
+    // appear in the right places.
+  } else if (llvm::dyn_cast<llvm::BitCastInst>(inst) ||
+             llvm::dyn_cast<llvm::TruncInst>(inst)) {
+    // Nothing to do: already handled by having aliasing in
+    // stackslots.
+  } else if (llvm::dyn_cast<llvm::ZExtInst>(inst) ||
+             llvm::dyn_cast<llvm::SExtInst>(inst)) {
+    llvm::Value *arg = inst->getOperand(0);
+    llvm::IntegerType *from_type =
+      llvm::cast<llvm::IntegerType>(arg->getType());
+    bool sign_extend = llvm::dyn_cast<llvm::SExtInst>(inst);
+    codebuf.move_to_reg(REG_EAX, arg);
+    codebuf.extend_to_i32(REG_EAX, sign_extend, from_type->getBitWidth());
+    codebuf.spill(REG_EAX, inst);
+  } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
+    // We have already reserved space on the stack to store our
+    // callee's argument.
+    for (unsigned i = 0; i < op->getNumArgOperands(); ++i) {
+      codebuf.move_to_reg(REG_EAX, op->getArgOperand(i));
+      // Assume args are all 32-bit
+      codebuf.write_reg_to_esp_offset(REG_EAX, i * 4);
+    }
+    // TODO: Optimise to output direct calls too
+    codebuf.move_to_reg(REG_EAX, op->getCalledValue());
+    codebuf.put_code(TEMPL("\xff\xd0")); // call *%eax
+    codebuf.spill(REG_EAX, op);
+  } else if (llvm::AllocaInst *op = llvm::dyn_cast<llvm::AllocaInst>(inst)) {
+    // XXX: Handle alignment
+    // XXX: Handle variable sizes
+    assert(!op->isArrayAllocation());
+    int size = data_layout.getTypeAllocSize(op->getAllocatedType());
+    // subl $size, %esp
+    codebuf.put_byte(0x81);
+    codebuf.put_byte(0xec);
+    codebuf.put_uint32(size);
+    if (codebuf.frame_callees_args_size != 0) {
+      // leal OFFSET(%esp), %eax
+      codebuf.put_code(TEMPL("\x8d\x84\x24"));
+      codebuf.put_uint32(codebuf.frame_callees_args_size);
+      codebuf.spill(REG_EAX, op);
+    } else {
+      // Optimization.
+      codebuf.spill(REG_ESP, op);
+    }
+  } else {
+    fprintf(stderr, "Unknown instruction type: %s\n",
+            get_instruction_type(inst));
+    assert(0);
+  }
+}
+
 void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf,
                   llvm::TargetData &data_layout) {
   codebuf.make_label(bb);
   for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
        inst != bb->end();
        ++inst) {
-    if (llvm::BinaryOperator *op =
-        llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
-      llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
-      int bits = inttype->getBitWidth();
-
-      codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
-      codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
-      switch (op->getOpcode()) {
-        case llvm::Instruction::Add: {
-          codebuf.put_arith_reg_reg(X86ArithAdd, REG_EAX, REG_ECX);
-          codebuf.spill(REG_EAX, inst);
-          break;
-        }
-        case llvm::Instruction::Sub: {
-          codebuf.put_arith_reg_reg(X86ArithSub, REG_EAX, REG_ECX);
-          codebuf.spill(REG_EAX, inst);
-          break;
-        }
-        case llvm::Instruction::Mul: {
-          // result = %eax * %ecx
-          // %eax = (uint32_t) result
-          // %edx = (uint32_t) (result >> 32) -- we ignore this
-          char code[2] = { 0xf7, 0xe1 }; // mull %ecx
-          codebuf.put_code(code, sizeof(code));
-          codebuf.spill(REG_EAX, inst);
-          break;
-        }
-        case llvm::Instruction::UDiv:
-        case llvm::Instruction::URem: {
-          codebuf.extend_to_i32(REG_EAX, false, bits);
-          codebuf.extend_to_i32(REG_ECX, false, bits);
-          codebuf.put_code(TEMPL("\x31\xd2")); // xorl %edx, %edx
-          // %eax = ((%edx << 32) | %eax) / %ecx
-          char code[2] = { 0xf7, 0xf1 }; // divl %ecx
-          codebuf.put_code(code, sizeof(code));
-          if (op->getOpcode() == llvm::Instruction::UDiv) {
-            codebuf.spill(REG_EAX, inst);
-          } else {
-            codebuf.spill(REG_EDX, inst);
-          }
-          break;
-        }
-        case llvm::Instruction::SDiv:
-        case llvm::Instruction::SRem: {
-          // TODO: This should extend args first, but this needs a test.
-          assert(bits == 32);
-          // Fill %edx with sign bit of %eax
-          codebuf.put_code(TEMPL("\x99")); // cltd (cdq in Intel syntax)
-          // %eax = ((%edx << 32) | %eax) / %ecx
-          char code[2] = { 0xf7, 0xf9 }; // idivl %ecx
-          codebuf.put_code(code, sizeof(code));
-          if (op->getOpcode() == llvm::Instruction::SDiv) {
-            codebuf.spill(REG_EAX, inst);
-          } else {
-            codebuf.spill(REG_EDX, inst);
-          }
-          break;
-        }
-        case llvm::Instruction::And: {
-          codebuf.put_arith_reg_reg(X86ArithAnd, REG_EAX, REG_ECX);
-          codebuf.spill(REG_EAX, inst);
-          break;
-        }
-        case llvm::Instruction::Or: {
-          codebuf.put_arith_reg_reg(X86ArithOr, REG_EAX, REG_ECX);
-          codebuf.spill(REG_EAX, inst);
-          break;
-        }
-        case llvm::Instruction::Xor: {
-          codebuf.put_arith_reg_reg(X86ArithXor, REG_EAX, REG_ECX);
-          codebuf.spill(REG_EAX, inst);
-          break;
-        }
-        case llvm::Instruction::Shl: {
-          codebuf.put_code(TEMPL("\xd3\xe0")); // shl %cl, %eax
-          codebuf.spill(REG_EAX, inst);
-          break;
-        }
-        case llvm::Instruction::LShr: {
-          // TODO: This should extend args first, but this needs a test.
-          assert(bits == 32);
-          codebuf.put_code(TEMPL("\xd3\xe8")); // shr %cl, %eax
-          codebuf.spill(REG_EAX, inst);
-          break;
-        }
-        case llvm::Instruction::AShr: {
-          // TODO: This should extend args first, but this needs a test.
-          assert(bits == 32);
-          codebuf.put_code(TEMPL("\xd3\xf8")); // sar %cl, %eax
-          codebuf.spill(REG_EAX, inst);
-          break;
-        }
-        default:
-          assert(!"Unknown binary operator");
-      }
-    } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
-      llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(
-          op->getOperand(0)->getType());
-      int bits = inttype->getBitWidth();
-
-      codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
-      codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
-      codebuf.extend_to_i32(REG_EAX, op->isSigned(), bits);
-      codebuf.extend_to_i32(REG_ECX, op->isSigned(), bits);
-      int x86_cond;
-      switch (op->getPredicate()) {
-        case llvm::CmpInst::ICMP_EQ:
-          x86_cond = 0x4; // 'e' (equal)
-          break;
-        case llvm::CmpInst::ICMP_NE:
-          x86_cond = 0x5; // 'ne' (not equal)
-          break;
-        // Unsigned comparisons
-        case llvm::CmpInst::ICMP_UGT:
-          x86_cond = 0x7; // 'a' (above)
-          break;
-        case llvm::CmpInst::ICMP_UGE:
-          x86_cond = 0x3; // 'ae' (above or equal)
-          break;
-        case llvm::CmpInst::ICMP_ULT:
-          x86_cond = 0x2; // 'b' (below)
-          break;
-        case llvm::CmpInst::ICMP_ULE:
-          x86_cond = 0x6; // 'be' (below or equal)
-          break;
-        // Signed comparisons
-        case llvm::CmpInst::ICMP_SGT:
-          x86_cond = 0xf; // 'g' (greater)
-          break;
-        case llvm::CmpInst::ICMP_SGE:
-          x86_cond = 0xd; // 'ge' (greater or equal)
-          break;
-        case llvm::CmpInst::ICMP_SLT:
-          x86_cond = 0xc; // 'l' (less)
-          break;
-        case llvm::CmpInst::ICMP_SLE:
-          x86_cond = 0xe; // 'le' (less or equal)
-          break;
-        default:
-          assert(!"Unknown comparison");
-      }
-      // XXX: we zero-extend first here
-      codebuf.put_code("\x31\xd2", 2); // xor %edx, %edx
-      // cmp %eax, %ecx
-      codebuf.put_byte(0x39);
-      codebuf.put_byte(0xc1);
-      // XXX: could store directly in stack slot
-      // setCC %dl
-      codebuf.put_byte(0x0f);
-      codebuf.put_byte(0x90 | x86_cond);
-      codebuf.put_byte(0xc2);
-      codebuf.spill(REG_EDX, inst);
-    } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
-      codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
-      // mov<size> (%eax), %eax
-      codebuf.put_sized_opcode(op->getType(), 0x8a);
-      codebuf.put_byte(0x00);
-      codebuf.spill(REG_EAX, inst);
-    } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
-      codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
-      codebuf.move_to_reg(REG_ECX, op->getValueOperand());
-      // mov<size> %ecx, (%eax)
-      codebuf.put_sized_opcode(op->getValueOperand()->getType(), 0x88);
-      codebuf.put_byte(0x08);
-      codebuf.spill(REG_EAX, inst);
-    } else if (llvm::ReturnInst *op
-               = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
-      if (llvm::Value *result = op->getReturnValue())
-        codebuf.move_to_reg(REG_EAX, result);
-      // Epilog:
-      codebuf.put_byte(0xc9); // leave
-      // Omit-frame-pointer version:
-      // // addl $frame_size, %esp
-      // codebuf.put_byte(0x81);
-      // codebuf.put_byte(0xc4);
-      // codebuf.put_uint32(codebuf.frame_size);
-      codebuf.put_ret();
-    } else if (llvm::BranchInst *op =
-               llvm::dyn_cast<llvm::BranchInst>(inst)) {
-      // TODO: could implement fallthrough to next basic block
-      if (op->isConditional()) {
-        codebuf.move_to_reg(REG_EAX, op->getCondition());
-        handle_phi_nodes(bb, op->getSuccessor(0), codebuf);
-        codebuf.put_code(TEMPL("\x85\xc0")); // testl %eax, %eax
-        codebuf.put_code(TEMPL("\x0f\x85")); // jnz <label> (32-bit)
-        codebuf.direct_jump_offset32(op->getSuccessor(0));
-        unconditional_jump(bb, op->getSuccessor(1), codebuf);
-      } else {
-        assert(op->isUnconditional());
-        unconditional_jump(bb, op->getSuccessor(0), codebuf);
-      }
-    } else if (llvm::PHINode *op = llvm::dyn_cast<llvm::PHINode>(inst)) {
-      // Nothing to do: phi nodes are handled by branches.
-      // XXX: Someone still needs to validate that phi nodes only
-      // appear in the right places.
-    } else if (llvm::dyn_cast<llvm::BitCastInst>(inst) ||
-               llvm::dyn_cast<llvm::TruncInst>(inst)) {
-      // Nothing to do: already handled by having aliasing in
-      // stackslots.
-    } else if (llvm::dyn_cast<llvm::ZExtInst>(inst) ||
-               llvm::dyn_cast<llvm::SExtInst>(inst)) {
-      llvm::Value *arg = inst->getOperand(0);
-      llvm::IntegerType *from_type =
-        llvm::cast<llvm::IntegerType>(arg->getType());
-      bool sign_extend = llvm::dyn_cast<llvm::SExtInst>(inst);
-      codebuf.move_to_reg(REG_EAX, arg);
-      codebuf.extend_to_i32(REG_EAX, sign_extend, from_type->getBitWidth());
-      codebuf.spill(REG_EAX, inst);
-    } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
-      // We have already reserved space on the stack to store our
-      // callee's argument.
-      for (unsigned i = 0; i < op->getNumArgOperands(); ++i) {
-        codebuf.move_to_reg(REG_EAX, op->getArgOperand(i));
-        // Assume args are all 32-bit
-        codebuf.write_reg_to_esp_offset(REG_EAX, i * 4);
-      }
-      // TODO: Optimise to output direct calls too
-      codebuf.move_to_reg(REG_EAX, op->getCalledValue());
-      codebuf.put_code(TEMPL("\xff\xd0")); // call *%eax
-      codebuf.spill(REG_EAX, op);
-    } else if (llvm::AllocaInst *op = llvm::dyn_cast<llvm::AllocaInst>(inst)) {
-      // XXX: Handle alignment
-      // XXX: Handle variable sizes
-      assert(!op->isArrayAllocation());
-      int size = data_layout.getTypeAllocSize(op->getAllocatedType());
-      // subl $size, %esp
-      codebuf.put_byte(0x81);
-      codebuf.put_byte(0xec);
-      codebuf.put_uint32(size);
-      if (codebuf.frame_callees_args_size != 0) {
-        // leal OFFSET(%esp), %eax
-        codebuf.put_code(TEMPL("\x8d\x84\x24"));
-        codebuf.put_uint32(codebuf.frame_callees_args_size);
-        codebuf.spill(REG_EAX, op);
-      } else {
-        // Optimization.
-        codebuf.spill(REG_ESP, op);
-      }
-    } else {
-      fprintf(stderr, "Unknown instruction type: %s\n",
-              get_instruction_type(inst));
-      assert(0);
-    }
+    translate_instruction(inst, codebuf, data_layout);
   }
 }
 
