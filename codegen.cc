@@ -60,13 +60,17 @@ enum X86ArithOpcode {
 
 class CodeBuf {
   char *buf_;
+  char *buf_end_;
   char *current_;
 
 public:
   CodeBuf() {
-    buf_ = (char *) mmap(NULL, 0x1000, PROT_READ | PROT_WRITE | PROT_EXEC,
+    // TODO: Use an expandable buffer
+    int size = 0x1000;
+    buf_ = (char *) mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
                          MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     assert(buf_ != MAP_FAILED);
+    buf_end_ = buf_ + size;
     current_ = buf_;
   }
 
@@ -74,19 +78,23 @@ public:
     return current_;
   }
 
-  void put_code(const char *data, size_t size) {
-    memcpy(current_, data, size);
+  char *put_alloc_space(size_t size) {
+    char *alloced = current_;
+    assert(current_ + size < buf_end_);
     current_ += size;
+    return alloced;
+  }
+
+  void put_code(const char *data, size_t size) {
+    memcpy(put_alloc_space(size), data, size);
   }
 
   void put_byte(uint8_t val) {
-    memcpy(current_, &val, sizeof(val));
-    current_ += sizeof(uint8_t);
+    *(uint8_t *) put_alloc_space(sizeof(val)) = val;
   }
 
   void put_uint32(uint32_t val) {
-    memcpy(current_, &val, sizeof(val));
-    current_ += sizeof(val);
+    *(uint32_t *) put_alloc_space(sizeof(val)) = val;
   }
 
   void move_to_reg(int reg, llvm::Value *value) {
