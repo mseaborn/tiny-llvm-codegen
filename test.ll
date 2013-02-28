@@ -114,6 +114,7 @@ define i16 *@get_global_array() {
 }
 
 @ptr_reloc = global i32* @global1
+@ptr_zero = global i32* null
 
 %MyStruct = type { i8, i32, i8 }
 @struct_val = global %MyStruct { i8 11, i32 22, i8 33 }

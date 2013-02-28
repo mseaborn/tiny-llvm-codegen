@@ -205,6 +205,9 @@ void test_features() {
   {
     int **ptr_reloc = (int **) globals["ptr_reloc"];
     assert(*ptr_reloc == (int *) globals["global1"]);
+
+    int **ptr = (int **) globals["ptr_zero"];
+    assert(*ptr == NULL);
   }
 
   {
