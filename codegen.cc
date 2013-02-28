@@ -17,6 +17,9 @@
 
 #define TEMPL(string) string, (sizeof(string) - 1)
 
+#define UNHANDLED_TYPE(val, type) \
+    if (llvm::isa<type>(val)) assert(!"Unhandled type: " #type)
+
 void dump_range_as_code(char *start, char *end) {
   FILE *fp = fopen("tmp_data", "w");
   assert(fp);
@@ -43,6 +46,16 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
       assert(!"Unknown ConstantExpr");
     }
   } else {
+    // Note that some of the types below are handled by write_global().
+    UNHANDLED_TYPE(val, llvm::BlockAddress);
+    UNHANDLED_TYPE(val, llvm::ConstantAggregateZero);
+    UNHANDLED_TYPE(val, llvm::ConstantArray);
+    UNHANDLED_TYPE(val, llvm::ConstantFP);
+    UNHANDLED_TYPE(val, llvm::ConstantInt);
+    UNHANDLED_TYPE(val, llvm::ConstantPointerNull);
+    UNHANDLED_TYPE(val, llvm::ConstantStruct);
+    UNHANDLED_TYPE(val, llvm::ConstantVector);
+    UNHANDLED_TYPE(val, llvm::UndefValue);
     assert(!"Unknown constant type");
   }
 }
