@@ -46,6 +46,9 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
                                                 expr->op_end());
       *result_offset += data_layout->getIndexedOffset(
           expr->getOperand(0)->getType(), indexes);
+    } else if (expr->getOpcode() == llvm::Instruction::BitCast) {
+      expand_constant(expr->getOperand(0), data_layout,
+                      result_global, result_offset);
     } else {
       fprintf(stderr, "Unknown ConstantExpr: %s\n", expr->getOpcodeName());
       assert(!"Unknown ConstantExpr");

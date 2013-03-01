@@ -227,3 +227,7 @@ define i16* @test_getelementptr2() {
 define i16* @test_getelementptr_constantexpr() {
   ret i16* getelementptr ([3 x [2 x i16]]* @array, i32 0, i32 2, i32 1)
 }
+
+define i8* @test_bitcast_constantexpr() {
+  ret i8* bitcast ([3 x [2 x i16]]* @array to i8*)
+}
