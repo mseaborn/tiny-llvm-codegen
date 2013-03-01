@@ -90,10 +90,10 @@ void test_features() {
   assert(func(200) == 800);
 
   {
-    uint32_t (*funcp)(int *ptr);
+    uint32_t (*funcp)(uint32_t *ptr);
     GET_FUNC(funcp, "test_load_int32");
-    int value = 0x12345678;
-    int cell = value;
+    uint32_t value = 0x12345678;
+    uint32_t cell = value;
     assert(funcp(&cell) == value);
   }
 

@@ -570,7 +570,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       assert(op->isUnconditional());
       unconditional_jump(bb, op->getSuccessor(0), codebuf);
     }
-  } else if (llvm::PHINode *op = llvm::dyn_cast<llvm::PHINode>(inst)) {
+  } else if (llvm::isa<llvm::PHINode>(inst)) {
     // Nothing to do: phi nodes are handled by branches.
     // XXX: Someone still needs to validate that phi nodes only
     // appear in the right places.
