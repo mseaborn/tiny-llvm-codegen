@@ -183,3 +183,7 @@ define i32 @test_ptrtoint(i8* %arg) {
   %1 = ptrtoint i8* %arg to i32
   ret i32 %1
 }
+define i8* @test_inttoptr(i32 %arg) {
+  %1 = inttoptr i32 %arg to i8*
+  ret i8* %1
+}

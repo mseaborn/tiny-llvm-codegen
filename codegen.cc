@@ -550,7 +550,8 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     // appear in the right places.
   } else if (llvm::dyn_cast<llvm::BitCastInst>(inst) ||
              llvm::dyn_cast<llvm::TruncInst>(inst) ||
-             llvm::dyn_cast<llvm::PtrToIntInst>(inst)) {
+             llvm::dyn_cast<llvm::PtrToIntInst>(inst) ||
+             llvm::dyn_cast<llvm::IntToPtrInst>(inst)) {
     // Nothing to do: already handled by having aliasing in
     // stackslots.
   } else if (llvm::dyn_cast<llvm::ZExtInst>(inst) ||
@@ -697,15 +698,21 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
       assert(codebuf.stackslots.count(inst) == 0);
       if (llvm::isa<llvm::BitCastInst>(inst) ||
           llvm::isa<llvm::TruncInst>(inst) ||
-          llvm::isa<llvm::PtrToIntInst>(inst)) {
+          llvm::isa<llvm::PtrToIntInst>(inst) ||
+          llvm::isa<llvm::IntToPtrInst>(inst)) {
         // Bitcast is a no-op: just reuse the same stack slot.
         llvm::Value *op = inst->getOperand(0);
         assert(codebuf.stackslots.count(op) == 1);
         codebuf.stackslots[inst] = codebuf.stackslots[op];
 
-        // TODO: Handle PtrToInt for non-pointer-sized ints
+        // TODO: Handle PtrToIntInst/IntToPtrInst for non-pointer-sized ints
         if (llvm::isa<llvm::PtrToIntInst>(inst)) {
           assert(inst->getType() == codebuf.data_layout->getIntPtrType(
+                     func->getParent()->getContext()));
+        } else if (llvm::IntToPtrInst *conv =
+                   llvm::dyn_cast<llvm::IntToPtrInst>(inst)) {
+          assert(inst->getOperand(0)->getType() ==
+                 codebuf.data_layout->getIntPtrType(
                      func->getParent()->getContext()));
         }
       } else {
