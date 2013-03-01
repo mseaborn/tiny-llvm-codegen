@@ -110,7 +110,33 @@ public:
     *(uint32_t *) put_alloc_space(sizeof(val)) = val;
   }
 
+  llvm::Value *get_aliased_value(llvm::Value *inst) {
+    // TODO: We could cache this mapping so that we don't have to
+    // chase down the reference chain each time an aliased value is
+    // used.
+    if (llvm::isa<llvm::BitCastInst>(inst) ||
+        llvm::isa<llvm::TruncInst>(inst) ||
+        llvm::isa<llvm::PtrToIntInst>(inst) ||
+        llvm::isa<llvm::IntToPtrInst>(inst)) {
+      // TODO: Handle PtrToIntInst/IntToPtrInst for non-pointer-sized ints
+      if (llvm::PtrToIntInst *conv = llvm::dyn_cast<llvm::PtrToIntInst>(inst)) {
+        llvm::Function *func = conv->getParent()->getParent();
+        assert(inst->getType() == data_layout->getIntPtrType(
+                   func->getParent()->getContext()));
+      } else if (llvm::IntToPtrInst *conv =
+                 llvm::dyn_cast<llvm::IntToPtrInst>(inst)) {
+        llvm::Function *func = conv->getParent()->getParent();
+        assert(conv->getOperand(0)->getType() ==
+               data_layout->getIntPtrType(func->getParent()->getContext()));
+      }
+      return llvm::cast<llvm::Instruction>(inst)->getOperand(0);
+    }
+    return NULL;
+  }
+
   void move_to_reg(int reg, llvm::Value *value) {
+    while (llvm::Value *alias = get_aliased_value(value))
+      value = alias;
     if (llvm::ConstantInt *cval = llvm::dyn_cast<llvm::ConstantInt>(value)) {
       // XXX: truncates
       uint32_t val = cval->getLimitedValue();
@@ -548,12 +574,6 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     // Nothing to do: phi nodes are handled by branches.
     // XXX: Someone still needs to validate that phi nodes only
     // appear in the right places.
-  } else if (llvm::dyn_cast<llvm::BitCastInst>(inst) ||
-             llvm::dyn_cast<llvm::TruncInst>(inst) ||
-             llvm::dyn_cast<llvm::PtrToIntInst>(inst) ||
-             llvm::dyn_cast<llvm::IntToPtrInst>(inst)) {
-    // Nothing to do: already handled by having aliasing in
-    // stackslots.
   } else if (llvm::dyn_cast<llvm::ZExtInst>(inst) ||
              llvm::dyn_cast<llvm::SExtInst>(inst)) {
     llvm::Value *arg = inst->getOperand(0);
@@ -593,6 +613,8 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       // Optimization.
       codebuf.spill(REG_ESP, op);
     }
+  } else if (codebuf.get_aliased_value(inst)) {
+    // Nothing to do:  handled elsewhere.
   } else {
     fprintf(stderr, "Unknown instruction type: %s\n",
             get_instruction_type(inst));
@@ -696,26 +718,7 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
          inst != bb->end();
          ++inst) {
       assert(codebuf.stackslots.count(inst) == 0);
-      if (llvm::isa<llvm::BitCastInst>(inst) ||
-          llvm::isa<llvm::TruncInst>(inst) ||
-          llvm::isa<llvm::PtrToIntInst>(inst) ||
-          llvm::isa<llvm::IntToPtrInst>(inst)) {
-        // Bitcast is a no-op: just reuse the same stack slot.
-        llvm::Value *op = inst->getOperand(0);
-        assert(codebuf.stackslots.count(op) == 1);
-        codebuf.stackslots[inst] = codebuf.stackslots[op];
-
-        // TODO: Handle PtrToIntInst/IntToPtrInst for non-pointer-sized ints
-        if (llvm::isa<llvm::PtrToIntInst>(inst)) {
-          assert(inst->getType() == codebuf.data_layout->getIntPtrType(
-                     func->getParent()->getContext()));
-        } else if (llvm::IntToPtrInst *conv =
-                   llvm::dyn_cast<llvm::IntToPtrInst>(inst)) {
-          assert(inst->getOperand(0)->getType() ==
-                 codebuf.data_layout->getIntPtrType(
-                     func->getParent()->getContext()));
-        }
-      } else {
+      if (!codebuf.get_aliased_value(inst)) {
         // XXX: We assume variables are int32s
         vars_size += 4;
         codebuf.stackslots[inst] = -vars_size;

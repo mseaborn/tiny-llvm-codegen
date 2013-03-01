@@ -238,6 +238,12 @@ void test_features() {
   }
 
   {
+    void *(*funcp)();
+    GET_FUNC(funcp, "test_bitcast_global");
+    assert(funcp() == (void *) globals["ptr_reloc"]);
+  }
+
+  {
     uint32_t (*funcp)(uint32_t arg);
 
     // Zero-extension

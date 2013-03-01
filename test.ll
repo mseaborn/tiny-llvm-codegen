@@ -145,6 +145,11 @@ define i32* @test_bitcast(i8* %arg) {
   ret i32* %1
 }
 
+define i8* @test_bitcast_global() {
+  %ptr = bitcast i32** @ptr_reloc to i8*
+  ret i8* %ptr
+}
+
 ; TODO: Generate all these variants
 ; Zero-extension
 define i32 @test_zext16(i32 %arg) {
