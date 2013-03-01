@@ -2,9 +2,11 @@
 
 set -eu
 
+llvm_config=llvm-config-3.1
+
 # Filter out -O2 to reduce compile time
 cflags="$(
-  for flag in $(llvm-config-3.0 --cxxflags); do
+  for flag in $($llvm_config --cxxflags); do
     case "$flag" in
       -O*) ;;
       *) echo $flag;;
@@ -26,14 +28,14 @@ g++ -m32 \
   codegen.o \
   codegen_test.o \
   gen_arithmetic_test.o \
-  $(llvm-config-3.0 --ldflags --libs) -ldl \
+  $($llvm_config --ldflags --libs) -ldl \
   -o codegen_test
 
 g++ -m32 \
   expand_getelementptr.o \
   codegen.o \
   run_program.o \
-  $(llvm-config-3.0 --ldflags --libs) -ldl \
+  $($llvm_config --ldflags --libs) -ldl \
   -o run_program
 
 ./codegen_test

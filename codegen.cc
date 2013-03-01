@@ -52,6 +52,7 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
     UNHANDLED_TYPE(val, llvm::BlockAddress);
     UNHANDLED_TYPE(val, llvm::ConstantAggregateZero);
     UNHANDLED_TYPE(val, llvm::ConstantArray);
+    UNHANDLED_TYPE(val, llvm::ConstantDataSequential);
     UNHANDLED_TYPE(val, llvm::ConstantFP);
     UNHANDLED_TYPE(val, llvm::ConstantInt);
     UNHANDLED_TYPE(val, llvm::ConstantPointerNull);
@@ -650,6 +651,12 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
     for (unsigned i = 0; i < val->getNumOperands(); ++i) {
       write_global(codebuf, dataseg, val->getOperand(i));
     }
+  } else if (llvm::ConstantDataSequential *val =
+             llvm::dyn_cast<llvm::ConstantDataSequential>(init)) {
+    // Note that getRawDataValues() assumes the host endianness is the same.
+    llvm::StringRef str = val->getRawDataValues();
+    memcpy(dataseg->current, str.data(), str.size());
+    dataseg->current += str.size();
   } else if (llvm::ConstantStruct *val =
              llvm::dyn_cast<llvm::ConstantStruct>(init)) {
     const llvm::StructLayout *layout = codebuf->data_layout->getStructLayout(
