@@ -150,8 +150,8 @@ public:
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       put_global_reloc(global, offset);
-    } else if (llvm::dyn_cast<llvm::Instruction>(value) ||
-               llvm::dyn_cast<llvm::Argument>(value)) {
+    } else if (llvm::isa<llvm::Instruction>(value) ||
+               llvm::isa<llvm::Argument>(value)) {
       assert(stackslots.count(value) == 1);
       read_reg_from_ebp_offset(reg, stackslots[value]);
     } else {
@@ -574,8 +574,8 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     // Nothing to do: phi nodes are handled by branches.
     // XXX: Someone still needs to validate that phi nodes only
     // appear in the right places.
-  } else if (llvm::dyn_cast<llvm::ZExtInst>(inst) ||
-             llvm::dyn_cast<llvm::SExtInst>(inst)) {
+  } else if (llvm::isa<llvm::ZExtInst>(inst) ||
+             llvm::isa<llvm::SExtInst>(inst)) {
     llvm::Value *arg = inst->getOperand(0);
     llvm::IntegerType *from_type =
       llvm::cast<llvm::IntegerType>(arg->getType());
