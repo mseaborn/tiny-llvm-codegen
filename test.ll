@@ -2,43 +2,43 @@
 target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-a0:0:64-f80:32:32-n8:16:32-S128"
 target triple = "i386-pc-linux-gnu"
 
-define i32 @test_return(i32 %arg) nounwind readnone {
+define i32 @test_return(i32 %arg) {
   ret i32 123
 }
 
-define i32 @test_add(i32 %arg) nounwind readnone {
+define i32 @test_add(i32 %arg) {
   %1 = add nsw i32 %arg, 100
   ret i32 %1
 }
 
-define i32 @test_sub(i32 %arg) nounwind readnone {
+define i32 @test_sub(i32 %arg) {
   %1 = sub nsw i32 1000, %arg
   ret i32 %1
 }
 
-define i32 @test_load_int32(i32* nocapture %ptr) nounwind readonly {
-  %1 = load i32* %ptr, align 4
+define i32 @test_load_int32(i32* nocapture %ptr) {
+  %1 = load i32* %ptr
   ret i32 %1
 }
-define i16 @test_load_int16(i16* nocapture %ptr) nounwind readonly {
-  %1 = load i16* %ptr, align 4
+define i16 @test_load_int16(i16* nocapture %ptr) {
+  %1 = load i16* %ptr
   ret i16 %1
 }
-define i8 @test_load_int8(i8* nocapture %ptr) nounwind readonly {
-  %1 = load i8* %ptr, align 4
+define i8 @test_load_int8(i8* nocapture %ptr) {
+  %1 = load i8* %ptr
   ret i8 %1
 }
 
-define void @test_store_int32(i32* nocapture %ptr, i32 %value) nounwind {
-  store i32 %value, i32* %ptr, align 4
+define void @test_store_int32(i32* nocapture %ptr, i32 %value) {
+  store i32 %value, i32* %ptr
   ret void
 }
-define void @test_store_int16(i16* nocapture %ptr, i16 %value) nounwind {
-  store i16 %value, i16* %ptr, align 4
+define void @test_store_int16(i16* nocapture %ptr, i16 %value) {
+  store i16 %value, i16* %ptr
   ret void
 }
-define void @test_store_int8(i8* nocapture %ptr, i8 %value) nounwind {
-  store i8 %value, i8* %ptr, align 4
+define void @test_store_int8(i8* nocapture %ptr, i8 %value) {
+  store i8 %value, i8* %ptr
   ret void
 }
 
@@ -47,7 +47,7 @@ define i32* @test_load_ptr(i32** %ptr) {
   ret i32* %1
 }
 
-define i1 @test_compare(i32 %arg) nounwind readonly {
+define i1 @test_compare(i32 %arg) {
   %1 = icmp eq i32 %arg, 99
   ret i1 %1
 }
@@ -58,7 +58,7 @@ label:
   ret i32 101
 }
 
-define i32 @test_conditional(i32 %arg) nounwind readonly {
+define i32 @test_conditional(i32 %arg) {
 entry:
   %cmp = icmp eq i32 %arg, 99
   br i1 %cmp, label %iftrue, label %iffalse
@@ -87,7 +87,7 @@ default:
   ret i32 %ret999
 }
 
-define i32 @test_phi(i32 %arg) nounwind readonly {
+define i32 @test_phi(i32 %arg) {
   %1 = icmp eq i32 %arg, 99
   br i1 %1, label %iftrue, label %iffalse
 iftrue:
