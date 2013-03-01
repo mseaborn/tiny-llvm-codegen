@@ -173,13 +173,13 @@ void test_features() {
   }
 
   {
-    int (*funcp)(void);
+    int (*funcp)();
     GET_FUNC(funcp, "test_direct_call");
     ASSERT_EQ(funcp(), 123);
   }
 
   {
-    int *(*funcp)(void);
+    int *(*funcp)();
     GET_FUNC(funcp, "get_global");
     int *ptr = funcp();
     assert(ptr);
@@ -187,7 +187,7 @@ void test_features() {
   }
 
   {
-    char *(*funcp)(void);
+    char *(*funcp)();
     GET_FUNC(funcp, "get_global_string");
     char *str = funcp();
     assert(str);
@@ -195,7 +195,7 @@ void test_features() {
   }
 
   {
-    short *(*funcp)(void);
+    short *(*funcp)();
     GET_FUNC(funcp, "get_global_array");
     short *array = funcp();
     ASSERT_EQ(array[0], 6);
@@ -223,7 +223,7 @@ void test_features() {
   }
 
   {
-    int (*funcp)(void);
+    int (*funcp)();
     GET_FUNC(funcp, "test_alloca");
     ASSERT_EQ(funcp(), 125);
 
