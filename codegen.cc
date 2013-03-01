@@ -47,6 +47,7 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
       *result_offset += data_layout->getIndexedOffset(
           expr->getOperand(0)->getType(), indexes);
     } else {
+      fprintf(stderr, "Unknown ConstantExpr: %s\n", expr->getOpcodeName());
       assert(!"Unknown ConstantExpr");
     }
   } else {
