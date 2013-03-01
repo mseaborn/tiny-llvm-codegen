@@ -65,6 +65,23 @@ iffalse:
   ret i32 %ret2
 }
 
+define i32 @test_switch(i32 %arg) {
+entry:
+  switch i32 %arg, label %default [
+    i32 1, label %match1
+    i32 5, label %match5
+  ]
+match1:
+  %ret1 = phi i32 [ 10, %entry ]
+  ret i32 %ret1
+match5:
+  %ret5 = phi i32 [ 50, %entry ]
+  ret i32 %ret5
+default:
+  %ret999 = phi i32 [ 999, %entry ]
+  ret i32 %ret999
+}
+
 define i32 @test_phi(i32 %arg) nounwind readonly {
   %1 = icmp eq i32 %arg, 99
   br i1 %1, label %iftrue, label %iffalse

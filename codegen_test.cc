@@ -159,6 +159,11 @@ void test_features() {
   ASSERT_EQ(func(99), 123);
   ASSERT_EQ(func(98), 456);
 
+  GET_FUNC(func, "test_switch");
+  ASSERT_EQ(func(1), 10);
+  ASSERT_EQ(func(5), 50);
+  ASSERT_EQ(func(6), 999);
+
   GET_FUNC(func, "test_phi");
   ASSERT_EQ(func(99), 123);
   ASSERT_EQ(func(98), 456);

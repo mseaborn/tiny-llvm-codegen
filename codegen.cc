@@ -574,6 +574,29 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       assert(op->isUnconditional());
       unconditional_jump(bb, op->getSuccessor(0), codebuf);
     }
+  } else if (llvm::SwitchInst *op =
+             llvm::dyn_cast<llvm::SwitchInst>(inst)) {
+    llvm::BasicBlock *bb = inst->getParent();
+    llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(
+        op->getCondition()->getType());
+    int bits = inttype->getBitWidth();
+
+    codebuf.move_to_reg(REG_EAX, op->getCondition());
+    codebuf.extend_to_i32(REG_EAX, false, bits);
+    for (llvm::SwitchInst::CaseIt iter = op->case_begin();
+         iter != op->case_end();
+         ++iter) {
+      handle_phi_nodes(bb, iter.getCaseSuccessor(), codebuf, REG_EDX);
+      codebuf.move_to_reg(REG_ECX, iter.getCaseValue());
+      // cmp %eax, %ecx
+      codebuf.put_byte(0x39);
+      codebuf.put_byte(0xc1);
+      // je <label> (32-bit)
+      codebuf.put_byte(0x0f);
+      codebuf.put_byte(0x84);
+      codebuf.direct_jump_offset32(iter.getCaseSuccessor());
+    }
+    unconditional_jump(bb, op->getDefaultDest(), codebuf);
   } else if (llvm::isa<llvm::PHINode>(inst)) {
     // Nothing to do: phi nodes are handled by branches.
     // XXX: Someone still needs to validate that phi nodes only
