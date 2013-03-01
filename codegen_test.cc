@@ -210,8 +210,8 @@ void test_features() {
     assert(*ptr == NULL);
   }
 
+  struct MyStruct { uint8_t a; uint32_t b; uint8_t c; };
   {
-    struct MyStruct { uint8_t a; uint32_t b; uint8_t c; };
     struct MyStruct *ptr = (struct MyStruct *) globals["struct_val"];
     ASSERT_EQ(ptr->a, 11);
     ASSERT_EQ(ptr->b, 22);
@@ -279,6 +279,21 @@ void test_features() {
     char *(*funcp)(uint32_t arg);
     GET_FUNC(funcp, "test_inttoptr");
     ASSERT_EQ((uint32_t) funcp(0x12345678), 0x12345678);
+  }
+
+  {
+    char *(*funcp)();
+    GET_FUNC(funcp, "test_getelementptr1");
+    struct MyStruct *ptr = (struct MyStruct *) globals["struct_val"];
+    ASSERT_EQ((uintptr_t) funcp(), (uintptr_t) &ptr->c);
+  }
+
+  {
+    short *(*funcp)();
+    GET_FUNC(funcp, "test_getelementptr2");
+    short *array = funcp();
+    ASSERT_EQ(array[0], 6);
+    ASSERT_EQ(array[-1], 5);
   }
 }
 

@@ -15,6 +15,8 @@
 // In LLVM 3.2, this becomes <llvm/DataLayout.h>
 #include <llvm/Target/TargetData.h>
 
+#include "expand_getelementptr.h"
+
 #define TEMPL(string) string, (sizeof(string) - 1)
 
 #define UNHANDLED_TYPE(val, type) \
@@ -686,10 +688,12 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
 }
 
 void translate_function(llvm::Function *func, CodeBuf &codebuf) {
+  llvm::BasicBlockPass *expand_gep = createExpandGetElementPtrPass();
   int callees_args_size = 0;
   for (llvm::Function::iterator bb = func->begin();
        bb != func->end();
        ++bb) {
+    expand_gep->runOnBasicBlock(*bb);
     for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
          inst != bb->end();
          ++inst) {
@@ -748,6 +752,8 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
   dump_range_as_code(function_entry, codebuf.get_current_pos());
 
   codebuf.globals[func] = (uintptr_t) function_entry;
+
+  delete expand_gep;
 }
 
 void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {

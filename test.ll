@@ -192,3 +192,13 @@ define i8* @test_inttoptr(i32 %arg) {
   %1 = inttoptr i32 %arg to i8*
   ret i8* %1
 }
+
+define i8* @test_getelementptr1() {
+  %addr = getelementptr %MyStruct* @struct_val, i32 0, i32 2
+  ret i8* %addr
+}
+
+define i16 *@test_getelementptr2() {
+  %addr = getelementptr [3 x [2 x i16]]* @array, i32 0, i32 2, i32 1
+  ret i16* %addr
+}
