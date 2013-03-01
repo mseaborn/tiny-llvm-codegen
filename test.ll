@@ -42,6 +42,11 @@ define void @test_store_int8(i8* nocapture %ptr, i8 %value) nounwind {
   ret void
 }
 
+define i32* @test_load_ptr(i32** %ptr) {
+  %1 = load i32** %ptr
+  ret i32* %1
+}
+
 define i1 @test_compare(i32 %arg) nounwind readonly {
   %1 = icmp eq i32 %arg, 99
   ret i1 %1

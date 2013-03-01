@@ -147,6 +147,13 @@ void test_features() {
     assert(mem[3] == 4);
   }
 
+  {
+    void *(*funcp)(void **ptr);
+    GET_FUNC(funcp, "test_load_ptr");
+    void *ptr = (void *) 0x12345678;
+    ASSERT_EQ((uintptr_t) funcp(&ptr), (uintptr_t) ptr);
+  }
+
   GET_FUNC(func, "test_compare");
   ASSERT_EQ(func(99), 1);
   ASSERT_EQ(func(98), 0);

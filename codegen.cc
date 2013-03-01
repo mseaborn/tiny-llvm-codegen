@@ -22,6 +22,8 @@
 #define UNHANDLED_TYPE(val, type) \
     if (llvm::isa<type>(val)) assert(!"Unhandled type: " #type)
 
+static const int kPointerSizeBits = 32;
+
 void dump_range_as_code(char *start, char *end) {
   FILE *fp = fopen("tmp_data", "w");
   assert(fp);
@@ -199,8 +201,14 @@ public:
   }
 
   void put_sized_opcode(llvm::Type *type, int opcode_base) {
-    llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(type);
-    int bits = inttype->getBitWidth();
+    int bits;
+    // TODO: Remove the use of pointer types via a rewrite pass instead.
+    if (llvm::isa<llvm::PointerType>(type)) {
+      bits = kPointerSizeBits;
+    } else {
+      llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(type);
+      bits = inttype->getBitWidth();
+    }
     assert(bits == 8 || bits == 16 || bits == 32);
     if (bits == 16) {
       put_byte(0x66); // DATA16 prefix
