@@ -207,14 +207,6 @@ void test_features() {
   }
 
   {
-    short *(*funcp)();
-    GET_FUNC(funcp, "get_global_array");
-    short *array = funcp();
-    ASSERT_EQ(array[0], 6);
-    ASSERT_EQ(array[-1], 5);
-  }
-
-  {
     int **ptr_reloc = (int **) globals["ptr_reloc"];
     assert(*ptr_reloc == (int *) globals["global1"]);
 
@@ -303,6 +295,14 @@ void test_features() {
   {
     short *(*funcp)();
     GET_FUNC(funcp, "test_getelementptr2");
+    short *array = funcp();
+    ASSERT_EQ(array[0], 6);
+    ASSERT_EQ(array[-1], 5);
+  }
+
+  {
+    short *(*funcp)();
+    GET_FUNC(funcp, "test_getelementptr_constantexpr");
     short *array = funcp();
     ASSERT_EQ(array[0], 6);
     ASSERT_EQ(array[-1], 5);

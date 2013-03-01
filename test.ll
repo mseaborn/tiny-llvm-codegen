@@ -134,10 +134,6 @@ define i8* @get_global_string() {
    [2 x i16] [i16 3, i16 4],
    [2 x i16] [i16 5, i16 6]]
 
-define i16 *@get_global_array() {
-  ret i16* getelementptr ([3 x [2 x i16]]* @array, i32 0, i32 2, i32 1)
-}
-
 @ptr_reloc = global i32* @global1
 @ptr_zero = global i32* null
 
@@ -226,4 +222,8 @@ define i8* @test_getelementptr1() {
 define i16 *@test_getelementptr2() {
   %addr = getelementptr [3 x [2 x i16]]* @array, i32 0, i32 2, i32 1
   ret i16* %addr
+}
+
+define i16* @test_getelementptr_constantexpr() {
+  ret i16* getelementptr ([3 x [2 x i16]]* @array, i32 0, i32 2, i32 1)
 }
