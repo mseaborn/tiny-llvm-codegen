@@ -178,3 +178,8 @@ define i32 @test_sext1(i32 %arg) {
   %2 = sext i1 %1 to i32
   ret i32 %2
 }
+
+define i32 @test_ptrtoint(i8* %arg) {
+  %1 = ptrtoint i8* %arg to i32
+  ret i32 %1
+}

@@ -262,6 +262,12 @@ void test_features() {
     ASSERT_EQ(funcp(0x81828384), 0);
     ASSERT_EQ(funcp(0x81828385), 0xffffffff);
   }
+
+  {
+    uint32_t (*funcp)(char *arg);
+    GET_FUNC(funcp, "test_ptrtoint");
+    ASSERT_EQ(funcp((char *) 0x12345678), 0x12345678);
+  }
 }
 
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
