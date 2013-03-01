@@ -219,7 +219,7 @@ define i8* @test_getelementptr1() {
   ret i8* %addr
 }
 
-define i16 *@test_getelementptr2() {
+define i16* @test_getelementptr2() {
   %addr = getelementptr [3 x [2 x i16]]* @array, i32 0, i32 2, i32 1
   ret i16* %addr
 }
