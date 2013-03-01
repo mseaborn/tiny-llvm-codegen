@@ -344,22 +344,23 @@ enum {
 
 void handle_phi_nodes(llvm::BasicBlock *from_bb,
                       llvm::BasicBlock *to_bb,
-                      CodeBuf &codebuf) {
+                      CodeBuf &codebuf,
+                      int tmp_reg) {
   for (llvm::BasicBlock::InstListType::iterator inst = to_bb->begin();
        inst != to_bb->end();
        ++inst) {
     llvm::PHINode *phi = llvm::dyn_cast<llvm::PHINode>(inst);
     if (!phi)
       break;
-    codebuf.move_to_reg(REG_EAX, phi->getIncomingValueForBlock(from_bb));
-    codebuf.spill(REG_EAX, phi);
+    codebuf.move_to_reg(tmp_reg, phi->getIncomingValueForBlock(from_bb));
+    codebuf.spill(tmp_reg, phi);
   }
 }
 
 void unconditional_jump(llvm::BasicBlock *from_bb,
                         llvm::BasicBlock *to_bb,
                         CodeBuf &codebuf) {
-  handle_phi_nodes(from_bb, to_bb, codebuf);
+  handle_phi_nodes(from_bb, to_bb, codebuf, REG_EAX);
   // jmp <label> (32-bit)
   codebuf.put_byte(0xe9);
   codebuf.direct_jump_offset32(to_bb);
@@ -563,8 +564,8 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     // TODO: could implement fallthrough to next basic block
     llvm::BasicBlock *bb = inst->getParent();
     if (op->isConditional()) {
+      handle_phi_nodes(bb, op->getSuccessor(0), codebuf, REG_EAX);
       codebuf.move_to_reg(REG_EAX, op->getCondition());
-      handle_phi_nodes(bb, op->getSuccessor(0), codebuf);
       codebuf.put_code(TEMPL("\x85\xc0")); // testl %eax, %eax
       codebuf.put_code(TEMPL("\x0f\x85")); // jnz <label> (32-bit)
       codebuf.direct_jump_offset32(op->getSuccessor(0));

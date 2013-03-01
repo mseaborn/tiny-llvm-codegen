@@ -54,12 +54,15 @@ label:
 }
 
 define i32 @test_conditional(i32 %arg) nounwind readonly {
-  %1 = icmp eq i32 %arg, 99
-  br i1 %1, label %iftrue, label %iffalse
+entry:
+  %cmp = icmp eq i32 %arg, 99
+  br i1 %cmp, label %iftrue, label %iffalse
 iftrue:
-  ret i32 123
+  %ret1 = phi i32 [ 123, %entry ]
+  ret i32 %ret1
 iffalse:
-  ret i32 456
+  %ret2 = phi i32 [ 456, %entry ]
+  ret i32 %ret2
 }
 
 define i32 @test_phi(i32 %arg) nounwind readonly {
