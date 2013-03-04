@@ -398,6 +398,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
     llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
     int bits = inttype->getBitWidth();
+    assert(bits >= 8); // Disallow i1
 
     codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
     codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
@@ -493,6 +494,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(
         op->getOperand(0)->getType());
     int bits = inttype->getBitWidth();
+    assert(bits >= 8); // Disallow i1
 
     codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
     codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
@@ -535,8 +537,6 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       default:
         assert(!"Unknown comparison");
     }
-    // XXX: we zero-extend first here
-    codebuf.put_code("\x31\xd2", 2); // xor %edx, %edx
     // cmp %eax, %ecx
     codebuf.put_byte(0x39);
     codebuf.put_byte(0xc1);
@@ -578,7 +578,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     if (op->isConditional()) {
       handle_phi_nodes(bb, op->getSuccessor(0), codebuf, REG_EAX);
       codebuf.move_to_reg(REG_EAX, op->getCondition());
-      codebuf.put_code(TEMPL("\x85\xc0")); // testl %eax, %eax
+      codebuf.put_code(TEMPL("\x84\xc0")); // testb %eax, %eax
       codebuf.put_code(TEMPL("\x0f\x85")); // jnz <label> (32-bit)
       codebuf.direct_jump_offset32(op->getSuccessor(0));
       unconditional_jump(bb, op->getSuccessor(1), codebuf);
@@ -592,6 +592,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(
         op->getCondition()->getType());
     int bits = inttype->getBitWidth();
+    assert(bits >= 8); // Disallow i1
 
     codebuf.move_to_reg(REG_EAX, op->getCondition());
     codebuf.extend_to_i32(REG_EAX, false, bits);

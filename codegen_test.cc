@@ -154,10 +154,13 @@ void test_features() {
     ASSERT_EQ((uintptr_t) funcp(&ptr), (uintptr_t) ptr);
   }
 
-  GET_FUNC(func, "test_compare");
-  ASSERT_EQ(func(99), 1);
-  ASSERT_EQ(func(98), 0);
-  ASSERT_EQ(func(100), 0);
+  {
+    uint8_t (*funcp)(int arg);
+    GET_FUNC(funcp, "test_compare");
+    ASSERT_EQ(funcp(99), 1);
+    ASSERT_EQ(funcp(98), 0);
+    ASSERT_EQ(funcp(100), 0);
+  }
 
   GET_FUNC(func, "test_branch");
   ASSERT_EQ(func(0), 101);
