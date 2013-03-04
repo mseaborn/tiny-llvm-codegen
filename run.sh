@@ -12,7 +12,7 @@ cflags="$(
       *) echo $flag;;
     esac
   done)"
-cflags="$cflags -UNDEBUG -Wall"
+cflags="$cflags -UNDEBUG -Wall -Werror"
 
 python test_generate_code.py > gen_arithmetic_test.c
 gcc -O1 -m32 -c gen_arithmetic_test.c
