@@ -328,6 +328,15 @@ void test_features() {
     GET_FUNC(funcp, "test_inttoptr_constantexpr");
     ASSERT_EQ((uint32_t) funcp(), 123456);
   }
+
+  {
+    void (*funcp)(char *dest, char *src, size_t size);
+    GET_FUNC(funcp, "test_memcpy");
+    char src[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    char dest[8];
+    funcp(dest, src, sizeof(src));
+    ASSERT_EQ(memcmp(dest, src, sizeof(src)), 0);
+  }
 }
 
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))

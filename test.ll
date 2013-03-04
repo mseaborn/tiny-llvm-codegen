@@ -239,3 +239,11 @@ define i32 @test_ptrtoint_constantexpr() {
 define i8* @test_inttoptr_constantexpr() {
   ret i8* inttoptr (i32 123456 to i8*)
 }
+
+declare void @llvm.memcpy.p0i8.p0i8.i32(i8*, i8*, i32, i32, i1)
+
+define void @test_memcpy(i8* %dest, i8* %src, i32 %size) {
+  call void @llvm.memcpy.p0i8.p0i8.i32(i8* %dest, i8* %src, i32 %size,
+                                       i32 1, i1 0)
+  ret void
+}

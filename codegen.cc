@@ -10,6 +10,7 @@
 #include <llvm/Constants.h>
 #include <llvm/InstrTypes.h>
 #include <llvm/Instructions.h>
+#include <llvm/IntrinsicInst.h>
 #include <llvm/Module.h>
 
 // In LLVM 3.2, this becomes <llvm/DataLayout.h>
@@ -736,6 +737,46 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
   }
 }
 
+// Expand memcpy intrinsic to a call to the host's memcpy() function.
+// TODO: Expand this in the original bitcode file.
+void expand_memcpy(llvm::BasicBlock *bb) {
+  for (llvm::BasicBlock::InstListType::iterator iter = bb->begin();
+       iter != bb->end(); ) {
+    llvm::Instruction *inst = iter++;
+    if (llvm::MemCpyInst *op = llvm::dyn_cast<llvm::MemCpyInst>(inst)) {
+      llvm::Module *module = bb->getParent()->getParent();
+      llvm::Type *i8 = llvm::Type::getInt8Ty(module->getContext());
+      llvm::Type *sizetype = llvm::Type::getInt32Ty(module->getContext());
+      std::vector<llvm::Type*> arg_types;
+      arg_types.push_back(
+          llvm::PointerType::get(i8, op->getDestAddressSpace()));
+      arg_types.push_back(
+          llvm::PointerType::get(i8, op->getSourceAddressSpace()));
+      arg_types.push_back(sizetype);
+      llvm::Type *memcpy_type =
+        llvm::PointerType::get(
+            llvm::FunctionType::get(llvm::Type::getVoidTy(module->getContext()),
+                                    arg_types, false), 0);
+
+      llvm::Value *func = llvm::ConstantExpr::getIntToPtr(
+          llvm::ConstantInt::get(sizetype, (uintptr_t) memcpy),
+          memcpy_type);
+
+      std::vector<llvm::Value*> args;
+      args.push_back(op->getRawDest());
+      args.push_back(op->getSource());
+      args.push_back(op->getLength());
+      // TODO: Support volatile copies.  The standard memcpy() is
+      // non-volatile.
+      assert(!op->isVolatile());
+      llvm::Value *new_call =
+        llvm::CallInst::Create(func, args, op->getName(), op);
+      op->replaceAllUsesWith(new_call);
+      op->eraseFromParent();
+    }
+  }
+}
+
 void translate_function(llvm::Function *func, CodeBuf &codebuf) {
   llvm::BasicBlockPass *expand_gep = createExpandGetElementPtrPass();
   int callees_args_size = 0;
@@ -743,6 +784,7 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
        bb != func->end();
        ++bb) {
     expand_gep->runOnBasicBlock(*bb);
+    expand_memcpy(bb);
     for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
          inst != bb->end();
          ++inst) {
