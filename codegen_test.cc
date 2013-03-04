@@ -322,6 +322,12 @@ void test_features() {
     GET_FUNC(funcp, "test_ptrtoint_constantexpr");
     ASSERT_EQ(funcp(), globals["array"]);
   }
+
+  {
+    void *(*funcp)();
+    GET_FUNC(funcp, "test_inttoptr_constantexpr");
+    ASSERT_EQ((uint32_t) funcp(), 123456);
+  }
 }
 
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))

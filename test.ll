@@ -235,3 +235,7 @@ define i8* @test_bitcast_constantexpr() {
 define i32 @test_ptrtoint_constantexpr() {
   ret i32 ptrtoint ([3 x [2 x i16]]* @array to i32)
 }
+
+define i8* @test_inttoptr_constantexpr() {
+  ret i8* inttoptr (i32 123456 to i8*)
+}

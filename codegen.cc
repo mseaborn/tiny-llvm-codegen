@@ -33,10 +33,14 @@ void dump_range_as_code(char *start, char *end) {
 }
 
 void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
-                     llvm::GlobalValue **result_global, int *result_offset) {
+                     llvm::GlobalValue **result_global,
+                     uint32_t *result_offset) {
   if (llvm::GlobalValue *global = llvm::dyn_cast<llvm::GlobalValue>(val)) {
     *result_global = global;
     *result_offset = 0;
+  } else if (llvm::ConstantInt *cval = llvm::dyn_cast<llvm::ConstantInt>(val)) {
+    *result_global = NULL;
+    *result_offset = cval->getZExtValue();
   } else if (llvm::ConstantExpr *expr =
              llvm::dyn_cast<llvm::ConstantExpr>(val)) {
     if (expr->getOpcode() == llvm::Instruction::GetElementPtr) {
@@ -47,7 +51,8 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
       *result_offset += data_layout->getIndexedOffset(
           expr->getOperand(0)->getType(), indexes);
     } else if (expr->getOpcode() == llvm::Instruction::BitCast ||
-               expr->getOpcode() == llvm::Instruction::PtrToInt) {
+               expr->getOpcode() == llvm::Instruction::PtrToInt ||
+               expr->getOpcode() == llvm::Instruction::IntToPtr) {
       // TODO: Do we need to truncate if a 64-bit constant is cast to
       // a pointer and back again?
       expand_constant(expr->getOperand(0), data_layout,
@@ -63,7 +68,6 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
     UNHANDLED_TYPE(val, llvm::ConstantArray);
     UNHANDLED_TYPE(val, llvm::ConstantDataSequential);
     UNHANDLED_TYPE(val, llvm::ConstantFP);
-    UNHANDLED_TYPE(val, llvm::ConstantInt);
     UNHANDLED_TYPE(val, llvm::ConstantPointerNull);
     UNHANDLED_TYPE(val, llvm::ConstantStruct);
     UNHANDLED_TYPE(val, llvm::ConstantVector);
@@ -149,19 +153,17 @@ public:
   void move_to_reg(int reg, llvm::Value *value) {
     while (llvm::Value *alias = get_aliased_value(value))
       value = alias;
-    if (llvm::ConstantInt *cval = llvm::dyn_cast<llvm::ConstantInt>(value)) {
-      // XXX: truncates
-      uint32_t val = cval->getLimitedValue();
-      // movl $INT32, %reg
-      put_byte(0xb8 | reg);
-      put_uint32(val);
-    } else if (llvm::Constant *cval = llvm::dyn_cast<llvm::Constant>(value)) {
+    if (llvm::Constant *cval = llvm::dyn_cast<llvm::Constant>(value)) {
       llvm::GlobalValue *global;
-      int offset;
+      uint32_t offset;
       expand_constant(cval, data_layout, &global, &offset);
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
-      put_global_reloc(global, offset);
+      if (global) {
+        put_global_reloc(global, offset);
+      } else {
+        put_uint32(offset);
+      }
     } else if (llvm::isa<llvm::Instruction>(value) ||
                llvm::isa<llvm::Argument>(value)) {
       assert(stackslots.count(value) == 1);
@@ -720,7 +722,7 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
   } else {
     // TODO: unify fully with expand_constant().
     llvm::GlobalValue *global;
-    int offset;
+    uint32_t offset;
     expand_constant(init, codebuf->data_layout, &global, &offset);
     assert(global);
     // This mirrors put_global_reloc().
