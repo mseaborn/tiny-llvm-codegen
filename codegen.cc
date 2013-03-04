@@ -46,7 +46,10 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
                                                 expr->op_end());
       *result_offset += data_layout->getIndexedOffset(
           expr->getOperand(0)->getType(), indexes);
-    } else if (expr->getOpcode() == llvm::Instruction::BitCast) {
+    } else if (expr->getOpcode() == llvm::Instruction::BitCast ||
+               expr->getOpcode() == llvm::Instruction::PtrToInt) {
+      // TODO: Do we need to truncate if a 64-bit constant is cast to
+      // a pointer and back again?
       expand_constant(expr->getOperand(0), data_layout,
                       result_global, result_offset);
     } else {

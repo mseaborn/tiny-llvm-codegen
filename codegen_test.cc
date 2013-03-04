@@ -316,6 +316,12 @@ void test_features() {
     GET_FUNC(funcp, "test_bitcast_constantexpr");
     ASSERT_EQ((uintptr_t) funcp(), globals["array"]);
   }
+
+  {
+    uint32_t (*funcp)();
+    GET_FUNC(funcp, "test_ptrtoint_constantexpr");
+    ASSERT_EQ(funcp(), globals["array"]);
+  }
 }
 
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
