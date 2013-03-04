@@ -815,12 +815,8 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
     size_t size =
       data_layout.getTypeAllocSize(global->getType()->getElementType());
     codebuf.globals[global] = (uint32_t) dataseg.current;
-    if (llvm::Constant *init = global->getInitializer()) {
-      write_global(&codebuf, &dataseg, init);
-      assert(dataseg.current == (char *) addr + size);
-    } else {
-      dataseg.current += size;
-    }
+    write_global(&codebuf, &dataseg, global->getInitializer());
+    assert(dataseg.current == (char *) addr + size);
   }
 
   for (llvm::Module::FunctionListType::iterator func = module->begin();
