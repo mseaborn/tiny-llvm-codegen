@@ -238,6 +238,11 @@ void test_features() {
   }
 
   {
+    uintptr_t *ptr = (uintptr_t *) globals["global_getelementptr"];
+    ASSERT_EQ(*ptr, offsetof(struct MyStruct, c));
+  }
+
+  {
     // TODO: Disallow extern_weak global variables instead.
     void *(*funcp)();
     GET_FUNC(funcp, "get_weak_global");

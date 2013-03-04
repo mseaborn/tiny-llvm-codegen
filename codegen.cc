@@ -40,8 +40,13 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
     *result_global = global;
     *result_offset = 0;
   } else if (llvm::ConstantInt *cval = llvm::dyn_cast<llvm::ConstantInt>(val)) {
+    assert(cval->getBitWidth() <= 32);
+    assert(cval->getBitWidth() % 8 == 0);
     *result_global = NULL;
     *result_offset = cval->getZExtValue();
+  } else if (llvm::isa<llvm::ConstantPointerNull>(val)) {
+    *result_global = NULL;
+    *result_offset = 0;
   } else if (llvm::ConstantExpr *expr =
              llvm::dyn_cast<llvm::ConstantExpr>(val)) {
     if (expr->getOpcode() == llvm::Instruction::GetElementPtr) {
@@ -69,7 +74,6 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
     UNHANDLED_TYPE(val, llvm::ConstantArray);
     UNHANDLED_TYPE(val, llvm::ConstantDataSequential);
     UNHANDLED_TYPE(val, llvm::ConstantFP);
-    UNHANDLED_TYPE(val, llvm::ConstantPointerNull);
     UNHANDLED_TYPE(val, llvm::ConstantStruct);
     UNHANDLED_TYPE(val, llvm::ConstantVector);
     UNHANDLED_TYPE(val, llvm::UndefValue);
@@ -679,16 +683,8 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
 
 void write_global(CodeBuf *codebuf, DataSegment *dataseg,
                   llvm::Constant *init) {
-  if (llvm::ConstantInt *val = llvm::dyn_cast<llvm::ConstantInt>(init)) {
-    assert(val->getBitWidth() % 8 == 0);
-    size_t size = val->getBitWidth() / 8;
-    // Assumes little endian.
-    memcpy(dataseg->current, val->getValue().getRawData(), size);
-    dataseg->current += size;
-    assert(codebuf->data_layout->getTypeAllocSize(init->getType()) == size);
-  } else if (llvm::isa<llvm::ConstantAggregateZero>(init) ||
-             llvm::isa<llvm::ConstantPointerNull>(init) ||
-             llvm::isa<llvm::UndefValue>(init)) {
+  if (llvm::isa<llvm::ConstantAggregateZero>(init) ||
+      llvm::isa<llvm::UndefValue>(init)) {
     dataseg->current += codebuf->data_layout->getTypeAllocSize(init->getType());
   } else if (llvm::ConstantArray *val =
              llvm::dyn_cast<llvm::ConstantArray>(init)) {
@@ -726,15 +722,20 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
     llvm::GlobalValue *global;
     uint32_t offset;
     expand_constant(init, codebuf->data_layout, &global, &offset);
-    assert(global);
-    // This mirrors put_global_reloc().
-    // TODO: unify these.
-    codebuf->global_relocs.push_back(
-        CodeBuf::GlobalReloc((uint32_t *) dataseg->current, global));
-    assert(codebuf->data_layout->getTypeAllocSize(init->getType())
-           == sizeof(uint32_t));
-    *(uint32_t *) dataseg->current = offset;
-    dataseg->current += sizeof(uint32_t);
+
+    uint32_t size = codebuf->data_layout->getTypeAllocSize(init->getType());
+    if (global) {
+      assert(size == sizeof(uint32_t));
+      // This mirrors put_global_reloc().
+      // TODO: unify these.
+      codebuf->global_relocs.push_back(
+          CodeBuf::GlobalReloc((uint32_t *) dataseg->current, global));
+      *(uint32_t *) dataseg->current = offset;
+    } else {
+      // Assumes little endian.
+      memcpy(dataseg->current, &offset, size);
+    }
+    dataseg->current += size;
   }
 }
 

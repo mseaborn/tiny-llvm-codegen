@@ -145,6 +145,8 @@ define i8* @get_global_string() {
 ; end of a struct.
 @undef_init = global [8 x i8] undef
 
+@global_getelementptr = global i8* getelementptr (%MyStruct* null, i32 0, i32 2)
+
 ; TODO: Disallow extern_weak global variables instead.
 @__ehdr_start = extern_weak global i8
 
