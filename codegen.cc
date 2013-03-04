@@ -687,7 +687,8 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
     dataseg->current += size;
     assert(codebuf->data_layout->getTypeAllocSize(init->getType()) == size);
   } else if (llvm::isa<llvm::ConstantAggregateZero>(init) ||
-             llvm::isa<llvm::ConstantPointerNull>(init)) {
+             llvm::isa<llvm::ConstantPointerNull>(init) ||
+             llvm::isa<llvm::UndefValue>(init)) {
     dataseg->current += codebuf->data_layout->getTypeAllocSize(init->getType());
   } else if (llvm::ConstantArray *val =
              llvm::dyn_cast<llvm::ConstantArray>(init)) {

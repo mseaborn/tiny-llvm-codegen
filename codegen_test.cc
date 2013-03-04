@@ -230,6 +230,14 @@ void test_features() {
   }
 
   {
+    char *ptr = (char *) globals["undef_init"];
+    // "undef" memory should still be zero-initialized.
+    for (int i = 0; i < 8; i++) {
+      ASSERT_EQ(ptr[i], 0);
+    }
+  }
+
+  {
     // TODO: Disallow extern_weak global variables instead.
     void *(*funcp)();
     GET_FUNC(funcp, "get_weak_global");

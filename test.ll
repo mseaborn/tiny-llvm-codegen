@@ -141,6 +141,10 @@ define i8* @get_global_string() {
 @struct_val = global %MyStruct { i8 11, i32 22, i8 33 }
 @struct_zero_init = global %MyStruct zeroinitializer
 
+; Need to handle "undef": Clang generates it for the padding at the
+; end of a struct.
+@undef_init = global [8 x i8] undef
+
 ; TODO: Disallow extern_weak global variables instead.
 @__ehdr_start = extern_weak global i8
 
