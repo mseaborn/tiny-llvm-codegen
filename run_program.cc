@@ -59,7 +59,7 @@ struct startup_info {
   int argc;
   char *argv0;
   char *envp0;
-  struct Elf32_auxv auxv[2];
+  Elf32_auxv_t auxv[2];
 };
 
 int main(int argc, char **argv) {

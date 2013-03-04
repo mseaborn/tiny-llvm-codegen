@@ -38,4 +38,8 @@ g++ -m32 \
   $($llvm_config --ldflags --libs) -ldl \
   -o run_program
 
+clang -m32 -O2 -c -emit-llvm hellow_minimal_irt.c -o hellow_minimal_irt.pexe
+
 ./codegen_test
+
+./run_program hellow_minimal_irt.pexe
