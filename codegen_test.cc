@@ -81,20 +81,20 @@ void test_features() {
   int (*func)(int arg);
 
   GET_FUNC(func, "test_return");
-  assert(func(0) == 123);
+  ASSERT_EQ(func(0), 123);
 
   GET_FUNC(func, "test_add");
-  assert(func(99) == 199);
+  ASSERT_EQ(func(99), 199);
 
   GET_FUNC(func, "test_sub");
-  assert(func(200) == 800);
+  ASSERT_EQ(func(200), 800);
 
   {
     uint32_t (*funcp)(uint32_t *ptr);
     GET_FUNC(funcp, "test_load_int32");
     uint32_t value = 0x12345678;
     uint32_t cell = value;
-    assert(funcp(&cell) == value);
+    ASSERT_EQ((uintptr_t) funcp(&cell), (uintptr_t) value);
   }
 
   {
@@ -121,7 +121,7 @@ void test_features() {
     int value = 0x12345678;
     int cell = 0;
     funcp(&cell, value);
-    assert(cell == value);
+    ASSERT_EQ(cell, value);
   }
 
   {
@@ -130,9 +130,9 @@ void test_features() {
     char mem[] = { 1, 2, 3, 4 };
     int value = 0x1234;
     funcp(mem, value);
-    assert(*(uint16_t *) mem == value);
-    assert(mem[2] == 3);
-    assert(mem[3] == 4);
+    ASSERT_EQ(*(uint16_t *) mem, value);
+    ASSERT_EQ(mem[2], 3);
+    ASSERT_EQ(mem[3], 4);
   }
 
   {
@@ -141,10 +141,10 @@ void test_features() {
     char mem[] = { 1, 2, 3, 4 };
     int value = 0x12;
     funcp(mem, value);
-    assert(*(uint8_t *) mem == value);
-    assert(mem[1] == 2);
-    assert(mem[2] == 3);
-    assert(mem[3] == 4);
+    ASSERT_EQ(*(uint8_t *) mem, value);
+    ASSERT_EQ(mem[1], 2);
+    ASSERT_EQ(mem[2], 3);
+    ASSERT_EQ(mem[3], 4);
   }
 
   {
@@ -208,10 +208,10 @@ void test_features() {
 
   {
     int **ptr_reloc = (int **) globals["ptr_reloc"];
-    assert(*ptr_reloc == (int *) globals["global1"]);
+    ASSERT_EQ((uintptr_t) *ptr_reloc, globals["global1"]);
 
     int **ptr = (int **) globals["ptr_zero"];
-    assert(*ptr == NULL);
+    ASSERT_EQ((uintptr_t) *ptr, (uintptr_t) NULL);
   }
 
   struct MyStruct { uint8_t a; uint32_t b; uint8_t c; };
@@ -238,13 +238,13 @@ void test_features() {
   {
     int *(*funcp)(char *arg);
     GET_FUNC(funcp, "test_bitcast");
-    assert(funcp((char *) 0x12345678) == (int *) 0x12345678);
+    ASSERT_EQ((uintptr_t) funcp((char *) 0x12345678), 0x12345678);
   }
 
   {
     void *(*funcp)();
     GET_FUNC(funcp, "test_bitcast_global");
-    assert(funcp() == (void *) globals["ptr_reloc"]);
+    ASSERT_EQ((uintptr_t) funcp(), globals["ptr_reloc"]);
   }
 
   {
@@ -311,7 +311,7 @@ void test_features() {
   {
     char *(*funcp)();
     GET_FUNC(funcp, "test_bitcast_constantexpr");
-    ASSERT_EQ((uintptr_t) funcp(), (uintptr_t) globals["array"]);
+    ASSERT_EQ((uintptr_t) funcp(), globals["array"]);
   }
 }
 
