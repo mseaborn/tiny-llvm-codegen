@@ -838,7 +838,7 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
     translate_bb(bb, codebuf);
   }
 
-  printf("%s:\n", func->getName().data());
+  printf("%s:\n", func->getName().str().c_str());
   fflush(stdout);
   dump_range_as_code(function_entry, codebuf.get_current_pos());
 
@@ -857,13 +857,25 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
   for (llvm::Module::GlobalListType::iterator global = module->global_begin();
        global != module->global_end();
        ++global) {
-    // TODO: handle alignments
-    uint32_t addr = (uint32_t) dataseg.current;
-    size_t size =
-      data_layout.getTypeAllocSize(global->getType()->getElementType());
-    codebuf.globals[global] = (uint32_t) dataseg.current;
-    write_global(&codebuf, &dataseg, global->getInitializer());
-    assert(dataseg.current == (char *) addr + size);
+    assert(!global->isThreadLocal());
+    if (global->hasInitializer()) {
+      // TODO: handle alignments
+      uint32_t addr = (uint32_t) dataseg.current;
+      size_t size =
+        data_layout.getTypeAllocSize(global->getType()->getElementType());
+      codebuf.globals[global] = (uint32_t) addr;
+      write_global(&codebuf, &dataseg, global->getInitializer());
+      assert(dataseg.current == (char *) addr + size);
+    } else {
+      // TODO: Disallow this case.
+      assert(global->getLinkage() == llvm::GlobalValue::ExternalWeakLinkage);
+      if (global->getName().str() != "__ehdr_start") {
+        fprintf(stderr, "Disallowed extern_weak symbol: %s\n",
+                global->getName().str().c_str());
+        assert(0);
+      }
+      codebuf.globals[global] = 0;
+    }
   }
 
   for (llvm::Module::FunctionListType::iterator func = module->begin();

@@ -230,6 +230,14 @@ void test_features() {
   }
 
   {
+    // TODO: Disallow extern_weak global variables instead.
+    void *(*funcp)();
+    GET_FUNC(funcp, "get_weak_global");
+    ASSERT_EQ((uintptr_t) funcp(), 0);
+    ASSERT_EQ(globals["__ehdr_start"], 0);
+  }
+
+  {
     int (*funcp)();
     GET_FUNC(funcp, "test_alloca");
     ASSERT_EQ(funcp(), 125);

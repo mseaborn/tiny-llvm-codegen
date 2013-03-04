@@ -141,6 +141,13 @@ define i8* @get_global_string() {
 @struct_val = global %MyStruct { i8 11, i32 22, i8 33 }
 @struct_zero_init = global %MyStruct zeroinitializer
 
+; TODO: Disallow extern_weak global variables instead.
+@__ehdr_start = extern_weak global i8
+
+define i8* @get_weak_global() {
+  ret i8* @__ehdr_start
+}
+
 define i32 @test_alloca() {
   %addr = alloca i32
   store i32 125, i32* %addr
