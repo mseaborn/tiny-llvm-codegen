@@ -870,7 +870,10 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
     } else {
       // TODO: Disallow this case.
       assert(global->getLinkage() == llvm::GlobalValue::ExternalWeakLinkage);
-      if (global->getName().str() != "__ehdr_start") {
+      std::string name = global->getName().str();
+      if (name != "__ehdr_start" &&
+          name != "__preinit_array_start" &&
+          name != "__preinit_array_end") {
         fprintf(stderr, "Disallowed extern_weak symbol: %s\n",
                 global->getName().str().c_str());
         assert(0);
