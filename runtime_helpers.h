@@ -23,6 +23,17 @@ void runtime_i64_Shl(uint64_t *result, uint64_t *arg1, uint64_t *arg2);
 void runtime_i64_LShr(uint64_t *result, uint64_t *arg1, uint64_t *arg2);
 void runtime_i64_AShr(int64_t *result, int64_t *arg1, int64_t *arg2);
 
+int runtime_i64_ICMP_EQ(uint64_t *arg1, uint64_t *arg2);
+int runtime_i64_ICMP_NE(uint64_t *arg1, uint64_t *arg2);
+int runtime_i64_ICMP_UGT(uint64_t *arg1, uint64_t *arg2);
+int runtime_i64_ICMP_UGE(uint64_t *arg1, uint64_t *arg2);
+int runtime_i64_ICMP_ULT(uint64_t *arg1, uint64_t *arg2);
+int runtime_i64_ICMP_ULE(uint64_t *arg1, uint64_t *arg2);
+int runtime_i64_ICMP_SGT(int64_t *arg1, int64_t *arg2);
+int runtime_i64_ICMP_SGE(int64_t *arg1, int64_t *arg2);
+int runtime_i64_ICMP_SLT(int64_t *arg1, int64_t *arg2);
+int runtime_i64_ICMP_SLE(int64_t *arg1, int64_t *arg2);
+
 #ifdef __cplusplus
 }
 #endif

@@ -601,6 +601,45 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       bits = inttype->getBitWidth();
     }
     assert(bits >= 8); // Disallow i1
+    if (bits == 64) {
+      // Generate function call to helper function.
+      int arg_size = 4;
+      int args_size = arg_size * 2;
+      assert(kMinCalleeArgsSize >= args_size);
+      assert(codebuf.frame_callees_args_size >= args_size);
+      // Argument 1: pointer to operand
+      codebuf.addr_to_reg(REG_EAX, inst->getOperand(0));
+      codebuf.write_reg_to_esp_offset(REG_EAX, arg_size * 0);
+      // Argument 2: pointer to operand
+      codebuf.addr_to_reg(REG_EAX, inst->getOperand(1));
+      codebuf.write_reg_to_esp_offset(REG_EAX, arg_size * 1);
+
+      uintptr_t func;
+      switch (op->getPredicate()) {
+#define MAP(OP) \
+    case llvm::CmpInst::OP: \
+      func = (uintptr_t) runtime_i64_##OP; break
+        MAP(ICMP_EQ);
+        MAP(ICMP_NE);
+        MAP(ICMP_UGT);
+        MAP(ICMP_UGE);
+        MAP(ICMP_ULT);
+        MAP(ICMP_ULE);
+        MAP(ICMP_SGT);
+        MAP(ICMP_SGE);
+        MAP(ICMP_SLT);
+        MAP(ICMP_SLE);
+#undef MAP
+        default:
+          assert(!"Unknown binary operator");
+      }
+      // Direct 32-bit call.
+      codebuf.put_byte(0xe8);
+      codebuf.put_uint32(func - ((uintptr_t) codebuf.get_current_pos()
+                                 + sizeof(uint32_t)));
+      codebuf.spill(REG_EAX, inst);
+      return;
+    }
 
     codebuf.move_to_reg(REG_ECX, inst->getOperand(0));
     codebuf.move_to_reg(REG_EAX, inst->getOperand(1));
