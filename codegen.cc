@@ -621,7 +621,6 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     // mov<size> %ecx, (%eax)
     codebuf.put_sized_opcode(op->getValueOperand()->getType(), 0x88);
     codebuf.put_byte(0x08);
-    codebuf.spill(REG_EAX, inst);
   } else if (llvm::ReturnInst *op
              = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
     if (llvm::Value *result = op->getReturnValue()) {
