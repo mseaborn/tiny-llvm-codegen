@@ -44,6 +44,10 @@ define i8 @test_load_int8(i8* %ptr) {
   ret i8 %1
 }
 
+define void @test_store_int64(i64* %ptr, i64 %value) {
+  store i64 %value, i64* %ptr
+  ret void
+}
 define void @test_store_int32(i32* %ptr, i32 %value) {
   store i32 %value, i32* %ptr
   ret void

@@ -616,11 +616,19 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       codebuf.spill(REG_EAX, inst);
     }
   } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
-    codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
-    codebuf.move_to_reg(REG_ECX, op->getValueOperand());
-    // mov<size> %ecx, (%eax)
-    codebuf.put_sized_opcode(op->getValueOperand()->getType(), 0x88);
-    codebuf.put_byte(0x08);
+    codebuf.move_to_reg(REG_EDX, op->getPointerOperand());
+    if (is_i64(op->getValueOperand()->getType())) {
+      codebuf.addr_to_reg(REG_EAX, op->getValueOperand());
+      codebuf.put_code(TEMPL("\x8b\x08")); // movl (%eax), %ecx
+      codebuf.put_code(TEMPL("\x89\x0a")); // movl %ecx, (%edx)
+      codebuf.put_code(TEMPL("\x8b\x48\x04")); // movl 4(%eax), %ecx
+      codebuf.put_code(TEMPL("\x89\x4a\x04")); // movl %ecx, 4(%edx)
+    } else {
+      codebuf.move_to_reg(REG_EAX, op->getValueOperand());
+      // mov<size> %eax, (%edx)
+      codebuf.put_sized_opcode(op->getValueOperand()->getType(), 0x88);
+      codebuf.put_byte(0x02);
+    }
   } else if (llvm::ReturnInst *op
              = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
     if (llvm::Value *result = op->getReturnValue()) {

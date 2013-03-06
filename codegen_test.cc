@@ -148,6 +148,15 @@ void test_features() {
   }
 
   {
+    void (*funcp)(uint64_t *ptr, uint64_t value);
+    GET_FUNC(funcp, "test_store_int64");
+    uint64_t value = 0x1234567887654321;
+    uint64_t cell = 0;
+    funcp(&cell, value);
+    ASSERT_EQ(cell, value);
+  }
+
+  {
     void (*funcp)(int *ptr, uint32_t value);
     GET_FUNC(funcp, "test_store_int32");
     int value = 0x12345678;
