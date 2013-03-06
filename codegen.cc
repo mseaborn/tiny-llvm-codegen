@@ -502,9 +502,15 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
         assert(!"Unknown binary operator");
     }
   } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
-    llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(
-        op->getOperand(0)->getType());
-    int bits = inttype->getBitWidth();
+    llvm::Type *operand_type = op->getOperand(0)->getType();
+    int bits;
+    // TODO: Remove the use of pointer types via a rewrite pass instead.
+    if (llvm::isa<llvm::PointerType>(operand_type)) {
+      bits = kPointerSizeBits;
+    } else {
+      llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(operand_type);
+      bits = inttype->getBitWidth();
+    }
     assert(bits >= 8); // Disallow i1
 
     codebuf.move_to_reg(REG_ECX, inst->getOperand(0));

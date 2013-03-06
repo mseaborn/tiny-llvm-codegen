@@ -162,6 +162,15 @@ void test_features() {
     ASSERT_EQ(funcp(100), 0);
   }
 
+  {
+    uint8_t (*funcp)(int *arg1, int *arg2);
+    GET_FUNC(funcp, "test_compare_ptr");
+    int location1;
+    int location2;
+    ASSERT_EQ(funcp(&location1, &location1), 1);
+    ASSERT_EQ(funcp(&location1, &location2), 0);
+  }
+
   GET_FUNC(func, "test_branch");
   ASSERT_EQ(func(0), 101);
 
