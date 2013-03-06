@@ -16,28 +16,28 @@ define i32 @test_sub(i32 %arg) {
   ret i32 %1
 }
 
-define i32 @test_load_int32(i32* nocapture %ptr) {
+define i32 @test_load_int32(i32* %ptr) {
   %1 = load i32* %ptr
   ret i32 %1
 }
-define i16 @test_load_int16(i16* nocapture %ptr) {
+define i16 @test_load_int16(i16* %ptr) {
   %1 = load i16* %ptr
   ret i16 %1
 }
-define i8 @test_load_int8(i8* nocapture %ptr) {
+define i8 @test_load_int8(i8* %ptr) {
   %1 = load i8* %ptr
   ret i8 %1
 }
 
-define void @test_store_int32(i32* nocapture %ptr, i32 %value) {
+define void @test_store_int32(i32* %ptr, i32 %value) {
   store i32 %value, i32* %ptr
   ret void
 }
-define void @test_store_int16(i16* nocapture %ptr, i16 %value) {
+define void @test_store_int16(i16* %ptr, i16 %value) {
   store i16 %value, i16* %ptr
   ret void
 }
-define void @test_store_int8(i8* nocapture %ptr, i8 %value) {
+define void @test_store_int8(i8* %ptr, i8 %value) {
   store i8 %value, i8* %ptr
   ret void
 }
