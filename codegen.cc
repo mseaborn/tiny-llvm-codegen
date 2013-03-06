@@ -40,10 +40,11 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
     *result_global = global;
     *result_offset = 0;
   } else if (llvm::ConstantInt *cval = llvm::dyn_cast<llvm::ConstantInt>(val)) {
-    assert(cval->getBitWidth() <= 32);
     assert(cval->getBitWidth() % 8 == 0);
     *result_global = NULL;
     *result_offset = cval->getZExtValue();
+    // Check for truncation.  TODO: Handle full 64-bit values too.
+    assert(*result_offset == cval->getZExtValue());
   } else if (llvm::isa<llvm::ConstantPointerNull>(val)) {
     *result_global = NULL;
     *result_offset = 0;

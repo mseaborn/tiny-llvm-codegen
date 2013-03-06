@@ -243,6 +243,11 @@ void test_features() {
   }
 
   {
+    uint64_t *ptr = (uint64_t *) globals["global_i64"];
+    ASSERT_EQ(*ptr, 1234);
+  }
+
+  {
     // TODO: Disallow extern_weak global variables instead.
     void *(*funcp)();
     GET_FUNC(funcp, "get_weak_global");
