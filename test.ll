@@ -104,6 +104,12 @@ return:
   ret i32 %2
 }
 
+define i32 @test_select(i32 %arg) {
+  %1 = icmp eq i32 %arg, 99
+  %2 = select i1 %1, i32 123, i32 456
+  ret i32 %2
+}
+
 define i32 @test_call(i32 (i32, i32)* %func, i32 %arg1, i32 %arg2) {
   %1 = call i32 %func(i32 %arg1, i32 %arg2)
   %2 = add i32 %1, 1000

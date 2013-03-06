@@ -187,6 +187,10 @@ void test_features() {
   ASSERT_EQ(func(99), 123);
   ASSERT_EQ(func(98), 456);
 
+  GET_FUNC(func, "test_select");
+  ASSERT_EQ(func(99), 123);
+  ASSERT_EQ(func(98), 456);
+
   {
     int (*funcp)(int (*func)(int arg1, int arg2), int arg1, int arg2);
     GET_FUNC(funcp, "test_call");

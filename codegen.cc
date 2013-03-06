@@ -588,6 +588,23 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     // codebuf.put_byte(0xc4);
     // codebuf.put_uint32(codebuf.frame_size);
     codebuf.put_ret();
+  } else if (llvm::SelectInst *op = llvm::dyn_cast<llvm::SelectInst>(inst)) {
+    // We could use the CMOV instruction here, but it's not available
+    // on old x86-32 CPUs.
+    codebuf.move_to_reg(REG_EAX, op->getCondition());
+    codebuf.move_to_reg(REG_ECX, op->getTrueValue());
+    codebuf.put_code(TEMPL("\x84\xc0")); // testb %eax, %eax
+
+    // TODO: Could use 8-bit jump.
+    codebuf.put_code(TEMPL("\x0f\x85")); // jnz <label> (32-bit)
+    uint32_t *jump_dest =
+      (uint32_t *) codebuf.put_alloc_space(sizeof(uint32_t));
+
+    codebuf.move_to_reg(REG_ECX, op->getFalseValue());
+    // Fix up relocation.
+    uintptr_t label = (uintptr_t) codebuf.get_current_pos();
+    *jump_dest = label - (uintptr_t) (jump_dest + 1);
+    codebuf.spill(REG_ECX, op);
   } else if (llvm::BranchInst *op =
              llvm::dyn_cast<llvm::BranchInst>(inst)) {
     // TODO: could implement fallthrough to next basic block
