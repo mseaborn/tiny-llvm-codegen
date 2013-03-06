@@ -92,6 +92,16 @@ void test_features() {
     ASSERT_EQ(funcp(), 1234100100100);
   }
 
+  {
+    uint64_t (*funcp)(uint64_t arg1, uint64_t arg2);
+    uint64_t value = 0x1234567887654321;
+    GET_FUNC(funcp, "test_i64_arg1");
+    ASSERT_EQ(funcp(value, 999), value);
+
+    GET_FUNC(funcp, "test_i64_arg2");
+    ASSERT_EQ(funcp(888, value), value);
+  }
+
   GET_FUNC(func, "test_add");
   ASSERT_EQ(func(99), 199);
 

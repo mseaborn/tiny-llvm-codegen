@@ -185,7 +185,11 @@ public:
     } else if (llvm::isa<llvm::Instruction>(value) ||
                llvm::isa<llvm::Argument>(value)) {
       assert(stackslots.count(value) == 1);
-      read_reg_from_ebp_offset(reg, stackslots[value]);
+      int ebp_offset = stackslots[value];
+      // movl ebp_offset(%ebp), %reg
+      put_byte(0x8b);
+      put_byte(0x85 | (reg << 3));
+      put_uint32(ebp_offset);
     } else {
       assert(!"Unknown value type");
     }
@@ -208,22 +212,17 @@ public:
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       put_uint32((uint32_t) addr);
+    } else if (llvm::isa<llvm::Instruction>(value) ||
+               llvm::isa<llvm::Argument>(value)) {
+      assert(stackslots.count(value) == 1);
+      int ebp_offset = stackslots[value];
+      // leal ebp_offset(%ebp), %reg
+      put_byte(0x8d);
+      put_byte(0x85 | (reg << 3));
+      put_uint32(ebp_offset);
     } else {
       assert(!"Unknown value type");
     }
-  }
-
-  void read_reg_from_ebp_offset(int reg, int ebp_offset) {
-    // movl ebp_offset(%ebp), %reg
-    put_byte(0x8b);
-    put_byte(0x85 | (reg << 3));
-    put_uint32(ebp_offset);
-    // Omit-frame-pointer version:
-    // // movl stack_offset(%esp), %reg
-    // put_byte(0x8b);
-    // put_byte(0x84 | (reg << 3));
-    // put_byte(0x24);
-    // put_uint32(stack_offset);
   }
 
   void write_reg_to_ebp_offset(int reg, int stack_offset) {
@@ -426,6 +425,16 @@ const char *get_instruction_type(llvm::Instruction *inst) {
   }
 }
 
+bool is_i64(llvm::Type *ty) {
+  if (llvm::IntegerType *intty = llvm::dyn_cast<llvm::IntegerType>(ty)) {
+    int bits = intty->getBitWidth();
+    if (bits > 32)
+      assert(bits == 64);
+    return bits == 64;
+  }
+  return false;
+}
+
 void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
   if (llvm::BinaryOperator *op =
       llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
@@ -601,9 +610,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
   } else if (llvm::ReturnInst *op
              = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
     if (llvm::Value *result = op->getReturnValue()) {
-      llvm::IntegerType *intty =
-        llvm::dyn_cast<llvm::IntegerType>(result->getType());
-      if (intty && intty->getBitWidth() == 64) {
+      if (is_i64(result->getType())) {
         codebuf.addr_to_reg(REG_EAX, result);
         codebuf.put_code(TEMPL("\x8b\x50\x04")); // movl 4(%eax), %edx
         codebuf.put_code(TEMPL("\x8b\x00")); // movl (%eax), %eax
@@ -855,13 +862,13 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
   }
   codebuf.frame_callees_args_size = callees_args_size;
 
+  int arg_offset = 8; // Skip return address and frame pointer
   for (llvm::Function::ArgumentListType::iterator arg = func->arg_begin();
        arg != func->arg_end();
        ++arg) {
-    // XXX: We assume arguments are int32s
-    int offset = 8; // Skip return address and frame pointer
     assert(codebuf.stackslots.count(arg) == 0);
-    codebuf.stackslots[arg] = offset + arg->getArgNo() * 4;
+    codebuf.stackslots[arg] = arg_offset;
+    arg_offset += (is_i64(arg->getType()) ? 8 : 4);
   }
 
   int vars_size = 0;

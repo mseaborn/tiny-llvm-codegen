@@ -10,6 +10,13 @@ define i64 @test_return_i64() {
   ret i64 1234100100100
 }
 
+define i64 @test_i64_arg1(i64 %arg1, i64 %arg2) {
+  ret i64 %arg1
+}
+define i64 @test_i64_arg2(i64 %arg1, i64 %arg2) {
+  ret i64 %arg2
+}
+
 define i32 @test_add(i32 %arg) {
   %1 = add nsw i32 %arg, 100
   ret i32 %1
