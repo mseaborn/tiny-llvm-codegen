@@ -716,9 +716,26 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     llvm::IntegerType *from_type =
       llvm::cast<llvm::IntegerType>(arg->getType());
     bool sign_extend = llvm::dyn_cast<llvm::SExtInst>(inst);
-    codebuf.move_to_reg(REG_EAX, arg);
-    codebuf.extend_to_i32(REG_EAX, sign_extend, from_type->getBitWidth());
-    codebuf.spill(REG_EAX, inst);
+    if (from_type->getBitWidth() == 32 && is_i64(inst->getType())) {
+      codebuf.move_to_reg(REG_EAX, arg);
+      // Same as spill(REG_EAX, inst), without the i64 check.
+      int stack_offset = codebuf.stackslots[inst];
+      codebuf.write_reg_to_ebp_offset(REG_EAX, stack_offset);
+      if (sign_extend) {
+        // Fill %edx with sign bit of %eax
+        codebuf.put_code(TEMPL("\x99")); // cltd (cdq in Intel syntax)
+        codebuf.write_reg_to_ebp_offset(REG_EDX, stack_offset + 4);
+      } else {
+        // movl $0, offset(%ebp)
+        codebuf.put_code(TEMPL("\xc7\x85"));
+        codebuf.put_uint32(stack_offset + 4); // Displacement
+        codebuf.put_uint32(0); // Immediate
+      }
+    } else {
+      codebuf.move_to_reg(REG_EAX, arg);
+      codebuf.extend_to_i32(REG_EAX, sign_extend, from_type->getBitWidth());
+      codebuf.spill(REG_EAX, inst);
+    }
   } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
     // We have already reserved space on the stack to store our
     // callee's argument.

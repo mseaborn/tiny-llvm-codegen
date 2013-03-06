@@ -238,6 +238,10 @@ define i32 @test_zext1(i32 %arg) {
   %2 = zext i1 %1 to i32
   ret i32 %2
 }
+define i64 @test_zext_32_to_64(i32 %arg) {
+  %1 = zext i32 %arg to i64
+  ret i64 %1
+}
 ; Sign-extension
 define i32 @test_sext16(i32 %arg) {
   %1 = trunc i32 %arg to i16
@@ -253,6 +257,10 @@ define i32 @test_sext1(i32 %arg) {
   %1 = trunc i32 %arg to i1
   %2 = sext i1 %1 to i32
   ret i32 %2
+}
+define i64 @test_sext_32_to_64(i32 %arg) {
+  %1 = sext i32 %arg to i64
+  ret i64 %1
 }
 
 define i32 @test_ptrtoint(i8* %arg) {
