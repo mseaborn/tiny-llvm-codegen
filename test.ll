@@ -6,6 +6,10 @@ define i32 @test_return(i32 %arg) {
   ret i32 123
 }
 
+define i64 @test_return_i64() {
+  ret i64 1234100100100
+}
+
 define i32 @test_add(i32 %arg) {
   %1 = add nsw i32 %arg, 100
   ret i32 %1

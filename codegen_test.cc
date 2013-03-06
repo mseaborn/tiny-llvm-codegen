@@ -86,6 +86,12 @@ void test_features() {
   GET_FUNC(func, "test_return");
   ASSERT_EQ(func(0), 123);
 
+  {
+    uint64_t (*funcp)();
+    GET_FUNC(funcp, "test_return_i64");
+    ASSERT_EQ(funcp(), 1234100100100);
+  }
+
   GET_FUNC(func, "test_add");
   ASSERT_EQ(func(99), 199);
 

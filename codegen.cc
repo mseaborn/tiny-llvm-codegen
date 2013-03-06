@@ -130,7 +130,8 @@ public:
 
 class CodeBuf : public DataBuffer {
 public:
-  CodeBuf(): DataBuffer(PROT_READ | PROT_WRITE | PROT_EXEC) {
+  CodeBuf(): DataBuffer(PROT_READ | PROT_WRITE | PROT_EXEC),
+             data_segment(PROT_READ | PROT_WRITE) {
   }
 
   void put_code(const char *data, size_t size) {
@@ -165,6 +166,7 @@ public:
     return NULL;
   }
 
+  // Generate code to put |value| into |reg|.
   void move_to_reg(int reg, llvm::Value *value) {
     while (llvm::Value *alias = get_aliased_value(value))
       value = alias;
@@ -184,6 +186,28 @@ public:
                llvm::isa<llvm::Argument>(value)) {
       assert(stackslots.count(value) == 1);
       read_reg_from_ebp_offset(reg, stackslots[value]);
+    } else {
+      assert(!"Unknown value type");
+    }
+  }
+
+  // Generate code to put the address of |value| into |reg|.
+  void addr_to_reg(int reg, llvm::Value *value) {
+    while (llvm::Value *alias = get_aliased_value(value))
+      value = alias;
+    if (llvm::Constant *cval = llvm::dyn_cast<llvm::Constant>(value)) {
+      llvm::GlobalValue *global;
+      uint64_t offset;
+      expand_constant(cval, data_layout, &global, &offset);
+      // Put constant in data segment.
+      // TODO: We could intern these constants, or avoid taking their
+      // address to start with.
+      assert(!global);
+      char *addr = data_segment.get_current_pos();
+      data_segment.put_bytes((char *) &offset, sizeof(offset));
+      // movl $INT32, %reg
+      put_byte(0xb8 | reg);
+      put_uint32((uint32_t) addr);
     } else {
       assert(!"Unknown value type");
     }
@@ -333,6 +357,8 @@ public:
       *addr += value;
     }
   }
+
+  DataBuffer data_segment;
 
   // XXX: move somewhere better
   std::map<llvm::Value*,int> stackslots;
@@ -574,8 +600,17 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     codebuf.spill(REG_EAX, inst);
   } else if (llvm::ReturnInst *op
              = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
-    if (llvm::Value *result = op->getReturnValue())
-      codebuf.move_to_reg(REG_EAX, result);
+    if (llvm::Value *result = op->getReturnValue()) {
+      llvm::IntegerType *intty =
+        llvm::dyn_cast<llvm::IntegerType>(result->getType());
+      if (intty && intty->getBitWidth() == 64) {
+        codebuf.addr_to_reg(REG_EAX, result);
+        codebuf.put_code(TEMPL("\x8b\x50\x04")); // movl 4(%eax), %edx
+        codebuf.put_code(TEMPL("\x8b\x00")); // movl (%eax), %eax
+      } else {
+        codebuf.move_to_reg(REG_EAX, result);
+      }
+    }
     // Epilog:
     codebuf.put_byte(0xc9); // leave
     // Omit-frame-pointer version:
@@ -701,8 +736,9 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
   }
 }
 
-void write_global(CodeBuf *codebuf, DataBuffer *dataseg,
-                  llvm::Constant *init) {
+void write_global(CodeBuf *codebuf, llvm::Constant *init) {
+  DataBuffer *dataseg = &codebuf->data_segment;
+
   if (llvm::isa<llvm::ConstantAggregateZero>(init) ||
       llvm::isa<llvm::UndefValue>(init)) {
     int size = codebuf->data_layout->getTypeAllocSize(init->getType());
@@ -710,7 +746,7 @@ void write_global(CodeBuf *codebuf, DataBuffer *dataseg,
   } else if (llvm::ConstantArray *val =
              llvm::dyn_cast<llvm::ConstantArray>(init)) {
     for (unsigned i = 0; i < val->getNumOperands(); ++i) {
-      write_global(codebuf, dataseg, val->getOperand(i));
+      write_global(codebuf, val->getOperand(i));
     }
   } else if (llvm::ConstantDataSequential *val =
              llvm::dyn_cast<llvm::ConstantDataSequential>(init)) {
@@ -724,7 +760,7 @@ void write_global(CodeBuf *codebuf, DataBuffer *dataseg,
     uint64_t prev_offset = 0;
     for (unsigned i = 0; i < val->getNumOperands(); ++i) {
       llvm::Constant *field = val->getOperand(i);
-      write_global(codebuf, dataseg, field);
+      write_global(codebuf, field);
 
       // Add padding.
       uint64_t next_offset =
@@ -872,7 +908,6 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
 
 void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
   CodeBuf codebuf;
-  DataBuffer dataseg(PROT_READ | PROT_WRITE);
 
   llvm::TargetData data_layout(module);
   codebuf.data_layout = &data_layout;
@@ -883,12 +918,12 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
     assert(!global->isThreadLocal());
     if (global->hasInitializer()) {
       // TODO: handle alignments
-      uint32_t addr = (uint32_t) dataseg.get_current_pos();
+      uint32_t addr = (uint32_t) codebuf.data_segment.get_current_pos();
       size_t size =
         data_layout.getTypeAllocSize(global->getType()->getElementType());
       codebuf.globals[global] = (uint32_t) addr;
-      write_global(&codebuf, &dataseg, global->getInitializer());
-      assert(dataseg.get_current_pos() == (char *) addr + size);
+      write_global(&codebuf, global->getInitializer());
+      assert(codebuf.data_segment.get_current_pos() == (char *) addr + size);
     } else {
       // TODO: Disallow this case.
       assert(global->getLinkage() == llvm::GlobalValue::ExternalWeakLinkage);
