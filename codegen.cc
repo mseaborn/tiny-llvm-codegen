@@ -765,8 +765,9 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     llvm::IntegerType *from_type =
       llvm::cast<llvm::IntegerType>(arg->getType());
     bool sign_extend = llvm::dyn_cast<llvm::SExtInst>(inst);
-    if (from_type->getBitWidth() == 32 && is_i64(inst->getType())) {
-      codebuf.move_to_reg(REG_EAX, arg);
+    codebuf.move_to_reg(REG_EAX, arg);
+    codebuf.extend_to_i32(REG_EAX, sign_extend, from_type->getBitWidth());
+    if (is_i64(inst->getType())) {
       // Same as spill(REG_EAX, inst), without the i64 check.
       int stack_offset = codebuf.stackslots[inst];
       codebuf.write_reg_to_ebp_offset(REG_EAX, stack_offset);
@@ -781,8 +782,6 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
         codebuf.put_uint32(0); // Immediate
       }
     } else {
-      codebuf.move_to_reg(REG_EAX, arg);
-      codebuf.extend_to_i32(REG_EAX, sign_extend, from_type->getBitWidth());
       codebuf.spill(REG_EAX, inst);
     }
   } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {

@@ -374,6 +374,17 @@ void test_features() {
     ASSERT_EQ(funcp(0x81111111), 0xffffffff81111111);
     ASSERT_EQ(funcp(0x71111111), 0x71111111);
   }
+  {
+    uint64_t (*funcp)(uint16_t arg);
+
+    GET_FUNC(funcp, "test_zext_16_to_64");
+    ASSERT_EQ(funcp(0x8111), 0x8111);
+    ASSERT_EQ(funcp(0x7111), 0x7111);
+
+    GET_FUNC(funcp, "test_sext_16_to_64");
+    ASSERT_EQ(funcp(0x8111), 0xffffffffffff8111);
+    ASSERT_EQ(funcp(0x7111), 0x7111);
+  }
 
   {
     uint32_t (*funcp)(char *arg);
