@@ -260,7 +260,7 @@ void test_features() {
 
   {
     uint64_t *ptr = (uint64_t *) globals["global_i64"];
-    ASSERT_EQ(*ptr, 1234);
+    ASSERT_EQ(*ptr, 1234100100100);
   }
 
   {

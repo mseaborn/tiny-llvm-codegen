@@ -158,7 +158,7 @@ define i8* @get_global_string() {
 
 @global_getelementptr = global i8* getelementptr (%MyStruct* null, i32 0, i32 2)
 
-@global_i64 = global i64 1234
+@global_i64 = global i64 1234100100100
 
 ; TODO: Disallow extern_weak global variables instead.
 @__ehdr_start = extern_weak global i8

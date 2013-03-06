@@ -35,7 +35,7 @@ void dump_range_as_code(char *start, char *end) {
 
 void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
                      llvm::GlobalValue **result_global,
-                     uint32_t *result_offset) {
+                     uint64_t *result_offset) {
   if (llvm::GlobalValue *global = llvm::dyn_cast<llvm::GlobalValue>(val)) {
     *result_global = global;
     *result_offset = 0;
@@ -43,7 +43,7 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
     assert(cval->getBitWidth() % 8 == 0);
     *result_global = NULL;
     *result_offset = cval->getZExtValue();
-    // Check for truncation.  TODO: Handle full 64-bit values too.
+    // Check for possible truncation.
     assert(*result_offset == cval->getZExtValue());
   } else if (llvm::isa<llvm::ConstantPointerNull>(val)) {
     *result_global = NULL;
@@ -161,8 +161,9 @@ public:
       value = alias;
     if (llvm::Constant *cval = llvm::dyn_cast<llvm::Constant>(value)) {
       llvm::GlobalValue *global;
-      uint32_t offset;
+      uint64_t offset;
       expand_constant(cval, data_layout, &global, &offset);
+      assert((uint32_t) offset == offset); // Sanity check.
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       if (global) {
@@ -744,12 +745,13 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
   } else {
     // TODO: unify fully with expand_constant().
     llvm::GlobalValue *global;
-    uint32_t offset;
+    uint64_t offset;
     expand_constant(init, codebuf->data_layout, &global, &offset);
 
     uint32_t size = codebuf->data_layout->getTypeAllocSize(init->getType());
     if (global) {
       assert(size == sizeof(uint32_t));
+      assert((uint32_t) offset == offset);
       // This mirrors put_global_reloc().
       // TODO: unify these.
       codebuf->global_relocs.push_back(
