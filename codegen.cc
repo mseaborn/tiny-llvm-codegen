@@ -410,9 +410,26 @@ void unconditional_jump(llvm::BasicBlock *from_bb,
   codebuf.direct_jump_offset32(to_bb);
 }
 
+bool is_i64(llvm::Type *ty) {
+  if (llvm::IntegerType *intty = llvm::dyn_cast<llvm::IntegerType>(ty)) {
+    int bits = intty->getBitWidth();
+    if (bits > 32)
+      assert(bits == 64);
+    return bits == 64;
+  }
+  return false;
+}
+
+int get_arg_stack_size(llvm::Type *arg_type) {
+  return is_i64(arg_type) ? 8 : 4;
+}
+
 int get_args_stack_size(llvm::CallInst *call) {
-  // Assume args are all 32-bit
-  return call->getNumArgOperands() * 4;
+  int size = 0;
+  for (unsigned i = 0; i < call->getNumArgOperands(); ++i) {
+    size += get_arg_stack_size(call->getArgOperand(i)->getType());
+  }
+  return size;
 }
 
 const char *get_instruction_type(llvm::Instruction *inst) {
@@ -423,16 +440,6 @@ const char *get_instruction_type(llvm::Instruction *inst) {
 #undef HANDLE_INST
     default: return "<unknown-instruction>";
   }
-}
-
-bool is_i64(llvm::Type *ty) {
-  if (llvm::IntegerType *intty = llvm::dyn_cast<llvm::IntegerType>(ty)) {
-    int bits = intty->getBitWidth();
-    if (bits > 32)
-      assert(bits == 64);
-    return bits == 64;
-  }
-  return false;
 }
 
 void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
@@ -698,15 +705,32 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
   } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
     // We have already reserved space on the stack to store our
     // callee's argument.
+    int stack_offset = 0;
     for (unsigned i = 0; i < op->getNumArgOperands(); ++i) {
-      codebuf.move_to_reg(REG_EAX, op->getArgOperand(i));
-      // Assume args are all 32-bit
-      codebuf.write_reg_to_esp_offset(REG_EAX, i * 4);
+      llvm::Value *arg = op->getArgOperand(i);
+      if (is_i64(arg->getType())) {
+        codebuf.addr_to_reg(REG_EAX, arg);
+        codebuf.put_code(TEMPL("\x8b\x10")); // movl (%eax), %edx
+        codebuf.write_reg_to_esp_offset(REG_EDX, stack_offset);
+        codebuf.put_code(TEMPL("\x8b\x50\x04")); // movl 4(%eax), %edx
+        codebuf.write_reg_to_esp_offset(REG_EDX, stack_offset + 4);
+        stack_offset += 8;
+      } else {
+        codebuf.move_to_reg(REG_EAX, arg);
+        codebuf.write_reg_to_esp_offset(REG_EAX, stack_offset);
+        stack_offset += 4;
+      }
     }
     // TODO: Optimise to output direct calls too
     codebuf.move_to_reg(REG_EAX, op->getCalledValue());
     codebuf.put_code(TEMPL("\xff\xd0")); // call *%eax
-    codebuf.spill(REG_EAX, op);
+    if (is_i64(op->getType())) {
+      codebuf.addr_to_reg(REG_ECX, op);
+      codebuf.put_code(TEMPL("\x89\x01")); // movl %eax, (%ecx)
+      codebuf.put_code(TEMPL("\x89\x51\x04")); // movl %edx, 4(%ecx)
+    } else {
+      codebuf.spill(REG_EAX, op);
+    }
   } else if (llvm::AllocaInst *op = llvm::dyn_cast<llvm::AllocaInst>(inst)) {
     // XXX: Handle alignment
     // XXX: Handle variable sizes
@@ -868,7 +892,7 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
        ++arg) {
     assert(codebuf.stackslots.count(arg) == 0);
     codebuf.stackslots[arg] = arg_offset;
-    arg_offset += (is_i64(arg->getType()) ? 8 : 4);
+    arg_offset += get_arg_stack_size(arg->getType());
   }
 
   int vars_size = 0;
@@ -880,8 +904,7 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
          ++inst) {
       assert(codebuf.stackslots.count(inst) == 0);
       if (!codebuf.get_aliased_value(inst)) {
-        // XXX: We assume variables are int32s
-        vars_size += 4;
+        vars_size += get_arg_stack_size(inst->getType());
         codebuf.stackslots[inst] = -vars_size;
       }
     }

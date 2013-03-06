@@ -134,6 +134,11 @@ define i32 @test_call2(i32 (i32, i32)* %func, i32 %arg1, i32 %arg2) {
   ret i32 %1
 }
 
+define i64 @test_call_i64(i64 (i64, i64)* %func, i64 %arg1, i64 %arg2) {
+  %1 = call i64 %func(i64 %arg1, i64 %arg2)
+  ret i64 %1
+}
+
 define i32 @test_direct_call() {
   %1 = call i32 @test_return(i32 0)
   ret i32 %1

@@ -33,6 +33,11 @@ int sub_func(int x, int y) {
   return x - y;
 }
 
+uint64_t sub_func_uint64(uint64_t x, uint64_t y) {
+  printf("sub_func_uint64(0x%"PRIx64", 0x%"PRIx64") called\n", x, y);
+  return x - y;
+}
+
 #define GET_FUNC(func, name) \
     printf("testing %s\n", name); \
     func = (typeof(func)) (globals[name]); \
@@ -217,6 +222,14 @@ void test_features() {
 
     GET_FUNC(funcp, "test_call2");
     ASSERT_EQ(funcp(sub_func, 50, 10), 40);
+  }
+
+  {
+    uint64_t (*funcp)(uint64_t (*func)(uint64_t arg1, uint64_t arg2),
+                      uint64_t arg1, uint64_t arg2);
+    GET_FUNC(funcp, "test_call_i64");
+    ASSERT_EQ(funcp(sub_func_uint64, 0x5020002000, 0x1010001000),
+              0x4010001000);
   }
 
   {
