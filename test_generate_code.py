@@ -33,8 +33,11 @@ def main():
 """
   func_list = []
   for sign in ('u', ''):
-    for int_size in (32, 16, 8):
+    for int_size in (64, 32, 16, 8):
       for op_name, op in OPERATORS:
+        if op_name in ('eq', 'ne', 'gt', 'ge', 'lt', 'le') and int_size == 64:
+          # TODO: Handle comparisons on i64.
+          continue
         ty = '%sint%i_t' % (sign, int_size)
         func_name = 'func_%s_%s' % (op_name, ty)
         args = {'ty': ty,

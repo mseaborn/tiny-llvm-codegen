@@ -22,18 +22,20 @@ g++ -m32 $cflags -c expand_getelementptr.cc
 g++ -m32 $cflags -c codegen.cc
 g++ -m32 $cflags -c codegen_test.cc
 g++ -m32 $cflags -c run_program.cc
+g++ -m32 $cflags -c -O2 runtime_helpers.c
 
-g++ -m32 \
-  expand_getelementptr.o \
-  codegen.o \
+lib="
+  expand_getelementptr.o
+  codegen.o
+  runtime_helpers.o"
+
+g++ -m32 $lib \
   codegen_test.o \
   gen_arithmetic_test.o \
   $($llvm_config --ldflags --libs) -ldl \
   -o codegen_test
 
-g++ -m32 \
-  expand_getelementptr.o \
-  codegen.o \
+g++ -m32 $lib \
   run_program.o \
   $($llvm_config --ldflags --libs) -ldl \
   -o run_program

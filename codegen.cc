@@ -17,6 +17,7 @@
 #include <llvm/Target/TargetData.h>
 
 #include "expand_getelementptr.h"
+#include "runtime_helpers.h"
 
 #define TEMPL(string) string, (sizeof(string) - 1)
 
@@ -24,6 +25,10 @@
     if (llvm::isa<type>(val)) assert(!"Unhandled type: " #type)
 
 static const int kPointerSizeBits = 32;
+
+// We always reserve stack space for calling runtime helper functions.
+// TODO: Only reserve this stack space if it is actually needed.
+static const int kMinCalleeArgsSize = 4 * 3; // 3 arguments
 
 void dump_range_as_code(char *start, char *end) {
   FILE *fp = fopen("tmp_data", "w");
@@ -450,6 +455,50 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
     int bits = inttype->getBitWidth();
     assert(bits >= 8); // Disallow i1
+    if (bits == 64) {
+      // Generate function call to helper function.
+      int arg_size = 4;
+      int args_size = arg_size * 3;
+      assert(kMinCalleeArgsSize >= args_size);
+      assert(codebuf.frame_callees_args_size >= args_size);
+      // Argument 1: result pointer
+      codebuf.addr_to_reg(REG_EAX, inst);
+      codebuf.write_reg_to_esp_offset(REG_EAX, arg_size * 0);
+      // Argument 2: pointer to operand
+      codebuf.addr_to_reg(REG_EAX, inst->getOperand(0));
+      codebuf.write_reg_to_esp_offset(REG_EAX, arg_size * 1);
+      // Argument 3: pointer to operand
+      codebuf.addr_to_reg(REG_EAX, inst->getOperand(1));
+      codebuf.write_reg_to_esp_offset(REG_EAX, arg_size * 2);
+
+      uintptr_t func;
+      switch (op->getOpcode()) {
+#define MAP(OP) \
+    case llvm::Instruction::OP: \
+      func = (uintptr_t) runtime_i64_##OP; break
+        MAP(Add);
+        MAP(Sub);
+        MAP(Mul);
+        MAP(UDiv);
+        MAP(URem);
+        MAP(SDiv);
+        MAP(SRem);
+        MAP(And);
+        MAP(Or);
+        MAP(Xor);
+        MAP(Shl);
+        MAP(LShr);
+        MAP(AShr);
+#undef MAP
+        default:
+          assert(!"Unknown binary operator");
+      }
+      // Direct 32-bit call.
+      codebuf.put_byte(0xe8);
+      codebuf.put_uint32(func - ((uintptr_t) codebuf.get_current_pos()
+                                 + sizeof(uint32_t)));
+      return;
+    }
 
     codebuf.move_to_reg(REG_EAX, inst->getOperand(0));
     codebuf.move_to_reg(REG_ECX, inst->getOperand(1));
@@ -903,7 +952,7 @@ void expand_memcpy(llvm::BasicBlock *bb) {
 
 void translate_function(llvm::Function *func, CodeBuf &codebuf) {
   llvm::BasicBlockPass *expand_gep = createExpandGetElementPtrPass();
-  int callees_args_size = 0;
+  int callees_args_size = kMinCalleeArgsSize;
   for (llvm::Function::iterator bb = func->begin();
        bb != func->end();
        ++bb) {

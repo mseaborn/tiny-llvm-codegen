@@ -467,13 +467,14 @@ void test_arithmetic() {
       { 123, 123 }, // equal
     };
     for (unsigned j = 0; j < ARRAY_SIZE(test_args); ++j) {
-      uint32_t arg1 = test_args[j][0];
-      uint32_t arg2 = test_args[j][1];
-      uint32_t expected_result = 0;
-      uint32_t actual_result = 0;
+      uint64_t arg1 = test_args[j][0];
+      uint64_t arg2 = test_args[j][1];
+      uint64_t expected_result = 0;
+      uint64_t actual_result = 0;
       test_funcs[i].func(&arg1, &arg2, &expected_result);
       translated_test_funcs[i].func(&arg1, &arg2, &actual_result);
-      printf("  %i, %i -> %i\n", arg1, arg2, actual_result);
+      printf("  %"PRIi64", %"PRIi64" -> %"PRIi64"\n",
+             arg1, arg2, actual_result);
       ASSERT_EQ(expected_result, actual_result);
     }
   }
