@@ -33,6 +33,16 @@ void dump_range_as_code(char *start, char *end) {
   system("objdump -D -b binary -m i386 tmp_data | grep '^ '");
 }
 
+bool is_i64(llvm::Type *ty) {
+  if (llvm::IntegerType *intty = llvm::dyn_cast<llvm::IntegerType>(ty)) {
+    int bits = intty->getBitWidth();
+    if (bits > 32)
+      assert(bits == 64);
+    return bits == 64;
+  }
+  return false;
+}
+
 void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
                      llvm::GlobalValue **result_global,
                      uint64_t *result_offset) {
@@ -168,6 +178,7 @@ public:
 
   // Generate code to put |value| into |reg|.
   void move_to_reg(int reg, llvm::Value *value) {
+    assert(!is_i64(value->getType()));
     while (llvm::Value *alias = get_aliased_value(value))
       value = alias;
     if (llvm::Constant *cval = llvm::dyn_cast<llvm::Constant>(value)) {
@@ -241,6 +252,7 @@ public:
   }
 
   void spill(int reg, llvm::Instruction *inst) {
+    assert(!is_i64(inst->getType()));
     write_reg_to_ebp_offset(reg, stackslots[inst]);
   }
 
@@ -408,16 +420,6 @@ void unconditional_jump(llvm::BasicBlock *from_bb,
   // jmp <label> (32-bit)
   codebuf.put_byte(0xe9);
   codebuf.direct_jump_offset32(to_bb);
-}
-
-bool is_i64(llvm::Type *ty) {
-  if (llvm::IntegerType *intty = llvm::dyn_cast<llvm::IntegerType>(ty)) {
-    int bits = intty->getBitWidth();
-    if (bits > 32)
-      assert(bits == 64);
-    return bits == 64;
-  }
-  return false;
 }
 
 int get_arg_stack_size(llvm::Type *arg_type) {
