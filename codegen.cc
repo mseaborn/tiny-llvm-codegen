@@ -111,7 +111,7 @@ class DataBuffer {
 public:
   DataBuffer(int prot) {
     // TODO: Use an expandable buffer
-    int size = 0x2000;
+    int size = 0x4000;
     buf_ = (char *) mmap(NULL, size, prot, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     assert(buf_ != MAP_FAILED);
     buf_end_ = buf_ + size;
