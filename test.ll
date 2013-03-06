@@ -313,3 +313,7 @@ define void @test_memcpy(i8* %dest, i8* %src, i32 %size) {
                                        i32 1, i1 0)
   ret void
 }
+
+define void @test_unreachable() {
+  unreachable
+}

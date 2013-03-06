@@ -870,6 +870,11 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       // Optimization.
       codebuf.spill(REG_ESP, op);
     }
+  } else if (llvm::isa<llvm::UnreachableInst>(inst)) {
+    // We don't have to output anything here, but it's better to make
+    // the program fail fast than do something undefined by running
+    // into the next basic block.
+    codebuf.put_byte(0xf4); // hlt
   } else if (codebuf.get_aliased_value(inst)) {
     // Nothing to do:  handled elsewhere.
   } else {
