@@ -27,6 +27,10 @@ define i32 @test_sub(i32 %arg) {
   ret i32 %1
 }
 
+define i64 @test_load_int64(i64* %ptr) {
+  %1 = load i64* %ptr
+  ret i64 %1
+}
 define i32 @test_load_int32(i32* %ptr) {
   %1 = load i32* %ptr
   ret i32 %1

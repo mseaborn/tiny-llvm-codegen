@@ -603,10 +603,18 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     codebuf.spill(REG_EDX, inst);
   } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
     codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
-    // mov<size> (%eax), %eax
-    codebuf.put_sized_opcode(op->getType(), 0x8a);
-    codebuf.put_byte(0x00);
-    codebuf.spill(REG_EAX, inst);
+    if (is_i64(op->getType())) {
+      codebuf.addr_to_reg(REG_EDX, op);
+      codebuf.put_code(TEMPL("\x8b\x08")); // movl (%eax), %ecx
+      codebuf.put_code(TEMPL("\x89\x0a")); // movl %ecx, (%edx)
+      codebuf.put_code(TEMPL("\x8b\x48\x04")); // movl 4(%eax), %ecx
+      codebuf.put_code(TEMPL("\x89\x4a\x04")); // movl %ecx, 4(%edx)
+    } else {
+      // mov<size> (%eax), %eax
+      codebuf.put_sized_opcode(op->getType(), 0x8a);
+      codebuf.put_byte(0x00);
+      codebuf.spill(REG_EAX, inst);
+    }
   } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
     codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
     codebuf.move_to_reg(REG_ECX, op->getValueOperand());

@@ -114,6 +114,14 @@ void test_features() {
   ASSERT_EQ(func(200), 800);
 
   {
+    uint64_t (*funcp)(uint64_t *ptr);
+    GET_FUNC(funcp, "test_load_int64");
+    uint64_t value = 0x1234567887654321;
+    uint64_t cell = value;
+    ASSERT_EQ((uintptr_t) funcp(&cell), (uintptr_t) value);
+  }
+
+  {
     uint32_t (*funcp)(uint32_t *ptr);
     GET_FUNC(funcp, "test_load_int32");
     uint32_t value = 0x12345678;
