@@ -468,7 +468,7 @@ void test_arithmetic() {
 
   for (int i = 0; test_funcs[i].name != NULL; ++i) {
     printf("test %s\n", test_funcs[i].name);
-    int test_args[][2] = {
+    int64_t test_args[][2] = {
       { 400, 100 },
       // Good for testing multiplication and division:
       { -7, -3 },
@@ -476,6 +476,9 @@ void test_arithmetic() {
       { -7, 3 },
       // For testing comparisons.
       { 123, 123 }, // equal
+      // For testing 64-bit operations.
+      { 0x410001001, 0x310001001 },
+      { -0x410001001, 0x310001001 },
     };
     for (unsigned j = 0; j < ARRAY_SIZE(test_args); ++j) {
       uint64_t arg1 = test_args[j][0];
