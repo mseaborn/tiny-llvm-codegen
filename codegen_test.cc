@@ -1,4 +1,5 @@
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <sys/mman.h>
 
@@ -8,9 +9,11 @@
 #include "arithmetic_test.h"
 #include "codegen.h"
 
-void my_assert(int val1, int val2, const char *expr1, const char *expr2,
+void my_assert(int64_t val1, int64_t val2, const char *expr1, const char *expr2,
                const char *file, int line_number) {
-  fprintf(stderr, "%i != %i (0x%x != 0x%x): %s != %s at %s:%i\n",
+  fprintf(stderr,
+          "%"PRIi64" != %"PRIi64" "
+          "(0x%"PRIx64" != 0x%"PRIx64"): %s != %s at %s:%i\n",
           val1, val2,
           val1, val2,
           expr1, expr2, file, line_number);
@@ -19,8 +22,8 @@ void my_assert(int val1, int val2, const char *expr1, const char *expr2,
 
 #define ASSERT_EQ(val1, val2)                                           \
   do {                                                                  \
-    int _val1 = (val1);                                                 \
-    int _val2 = (val2);                                                 \
+    int64_t _val1 = (val1);                                             \
+    int64_t _val2 = (val2);                                             \
     if (_val1 != _val2)                                                 \
       my_assert(_val1, _val2, #val1, #val2, __FILE__, __LINE__);        \
   } while (0);
