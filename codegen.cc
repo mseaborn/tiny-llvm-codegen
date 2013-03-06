@@ -93,17 +93,16 @@ enum X86ArithOpcode {
   X86ArithCmp,
 };
 
-class CodeBuf {
+class DataBuffer {
   char *buf_;
   char *buf_end_;
   char *current_;
 
 public:
-  CodeBuf() {
+  DataBuffer(int prot) {
     // TODO: Use an expandable buffer
     int size = 0x2000;
-    buf_ = (char *) mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
-                         MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    buf_ = (char *) mmap(NULL, size, prot, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     assert(buf_ != MAP_FAILED);
     buf_end_ = buf_ + size;
     current_ = buf_;
@@ -120,16 +119,26 @@ public:
     return alloced;
   }
 
-  void put_code(const char *data, size_t size) {
+  void put_bytes(const char *data, size_t size) {
     memcpy(put_alloc_space(size), data, size);
-  }
-
-  void put_byte(uint8_t val) {
-    *(uint8_t *) put_alloc_space(sizeof(val)) = val;
   }
 
   void put_uint32(uint32_t val) {
     *(uint32_t *) put_alloc_space(sizeof(val)) = val;
+  }
+};
+
+class CodeBuf : public DataBuffer {
+public:
+  CodeBuf(): DataBuffer(PROT_READ | PROT_WRITE | PROT_EXEC) {
+  }
+
+  void put_code(const char *data, size_t size) {
+    put_bytes(data, size);
+  }
+
+  void put_byte(uint8_t val) {
+    *(uint8_t *) put_alloc_space(sizeof(val)) = val;
   }
 
   llvm::Value *get_aliased_value(llvm::Value *inst) {
@@ -290,16 +299,16 @@ public:
 
   void make_label(llvm::BasicBlock *bb) {
     assert(labels.count(bb) == 0);
-    labels[bb] = (uint32_t) current_;
+    labels[bb] = (uint32_t) get_current_pos();
   }
 
   void direct_jump_offset32(llvm::BasicBlock *dest) {
     put_uint32(0); // Placeholder
-    jump_relocs.push_back(JumpReloc((uint32_t *) current_, dest));
+    jump_relocs.push_back(JumpReloc((uint32_t *) get_current_pos(), dest));
   }
 
   void put_global_reloc(llvm::GlobalValue *dest, int offset) {
-    global_relocs.push_back(GlobalReloc((uint32_t *) current_, dest));
+    global_relocs.push_back(GlobalReloc((uint32_t *) get_current_pos(), dest));
     put_uint32(offset);
   }
 
@@ -339,20 +348,6 @@ public:
 
   typedef std::pair<uint32_t*,llvm::GlobalValue*> GlobalReloc;
   std::vector<GlobalReloc> global_relocs;
-};
-
-class DataSegment {
-  char *buf_;
-
-public:
-  DataSegment() {
-    buf_ = (char *) mmap(NULL, 0x1000, PROT_READ | PROT_WRITE,
-                         MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    assert(buf_ != MAP_FAILED);
-    current = buf_;
-  }
-
-  char *current;
 };
 
 enum {
@@ -706,11 +701,12 @@ void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
   }
 }
 
-void write_global(CodeBuf *codebuf, DataSegment *dataseg,
+void write_global(CodeBuf *codebuf, DataBuffer *dataseg,
                   llvm::Constant *init) {
   if (llvm::isa<llvm::ConstantAggregateZero>(init) ||
       llvm::isa<llvm::UndefValue>(init)) {
-    dataseg->current += codebuf->data_layout->getTypeAllocSize(init->getType());
+    int size = codebuf->data_layout->getTypeAllocSize(init->getType());
+    dataseg->put_alloc_space(size);
   } else if (llvm::ConstantArray *val =
              llvm::dyn_cast<llvm::ConstantArray>(init)) {
     for (unsigned i = 0; i < val->getNumOperands(); ++i) {
@@ -720,8 +716,7 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
              llvm::dyn_cast<llvm::ConstantDataSequential>(init)) {
     // Note that getRawDataValues() assumes the host endianness is the same.
     llvm::StringRef str = val->getRawDataValues();
-    memcpy(dataseg->current, str.data(), str.size());
-    dataseg->current += str.size();
+    dataseg->put_bytes(str.data(), str.size());
   } else if (llvm::ConstantStruct *val =
              llvm::dyn_cast<llvm::ConstantStruct>(init)) {
     const llvm::StructLayout *layout = codebuf->data_layout->getStructLayout(
@@ -739,7 +734,7 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
       uint64_t field_size =
         codebuf->data_layout->getTypeAllocSize(field->getType());
       uint64_t padding_size = next_offset - prev_offset - field_size;
-      dataseg->current += padding_size;
+      dataseg->put_alloc_space(padding_size);
       prev_offset = next_offset;
     }
   } else {
@@ -755,13 +750,13 @@ void write_global(CodeBuf *codebuf, DataSegment *dataseg,
       // This mirrors put_global_reloc().
       // TODO: unify these.
       codebuf->global_relocs.push_back(
-          CodeBuf::GlobalReloc((uint32_t *) dataseg->current, global));
-      *(uint32_t *) dataseg->current = offset;
+          CodeBuf::GlobalReloc((uint32_t *) dataseg->get_current_pos(),
+                               global));
+      dataseg->put_uint32(offset);
     } else {
       // Assumes little endian.
-      memcpy(dataseg->current, &offset, size);
+      dataseg->put_bytes((char *) &offset, size);
     }
-    dataseg->current += size;
   }
 }
 
@@ -877,7 +872,7 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
 
 void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
   CodeBuf codebuf;
-  DataSegment dataseg;
+  DataBuffer dataseg(PROT_READ | PROT_WRITE);
 
   llvm::TargetData data_layout(module);
   codebuf.data_layout = &data_layout;
@@ -888,12 +883,12 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
     assert(!global->isThreadLocal());
     if (global->hasInitializer()) {
       // TODO: handle alignments
-      uint32_t addr = (uint32_t) dataseg.current;
+      uint32_t addr = (uint32_t) dataseg.get_current_pos();
       size_t size =
         data_layout.getTypeAllocSize(global->getType()->getElementType());
       codebuf.globals[global] = (uint32_t) addr;
       write_global(&codebuf, &dataseg, global->getInitializer());
-      assert(dataseg.current == (char *) addr + size);
+      assert(dataseg.get_current_pos() == (char *) addr + size);
     } else {
       // TODO: Disallow this case.
       assert(global->getLinkage() == llvm::GlobalValue::ExternalWeakLinkage);
