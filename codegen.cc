@@ -488,6 +488,10 @@ const char *get_instruction_type(llvm::Instruction *inst) {
 void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
   if (llvm::BinaryOperator *op =
       llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
+    if (op->getType()->isDoubleTy()) {
+      codebuf.unhandled_case("FP arithmetic");
+      return;
+    }
     llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
     int bits = inttype->getBitWidth();
     if (bits < 8) {
@@ -732,6 +736,10 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     codebuf.put_byte(0xc2);
     codebuf.spill(REG_EDX, inst);
   } else if (llvm::LoadInst *op = llvm::dyn_cast<llvm::LoadInst>(inst)) {
+    if (op->getType()->isDoubleTy()) {
+      codebuf.unhandled_case("FP memory load");
+      return;
+    }
     codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
     if (is_i64(op->getType())) {
       codebuf.addr_to_reg(REG_EDX, op);
@@ -746,6 +754,10 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       codebuf.spill(REG_EAX, inst);
     }
   } else if (llvm::StoreInst *op = llvm::dyn_cast<llvm::StoreInst>(inst)) {
+    if (op->getType()->isDoubleTy()) {
+      codebuf.unhandled_case("FP memory store");
+      return;
+    }
     codebuf.move_to_reg(REG_EDX, op->getPointerOperand());
     if (is_i64(op->getValueOperand()->getType())) {
       codebuf.addr_to_reg(REG_EAX, op->getValueOperand());
