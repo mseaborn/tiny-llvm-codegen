@@ -1043,14 +1043,21 @@ void expand_mem_intrinsics(llvm::BasicBlock *bb) {
       std::vector<llvm::Type*> arg_types;
       std::vector<llvm::Value*> args;
       uintptr_t mem_func;
-      if (llvm::MemCpyInst *op = llvm::dyn_cast<llvm::MemCpyInst>(inst)) {
+      if (llvm::MemTransferInst *op =
+          llvm::dyn_cast<llvm::MemTransferInst>(inst)) {
         arg_types.push_back(i8ptr);
         arg_types.push_back(i8ptr);
         arg_types.push_back(sizetype);
         args.push_back(op->getRawDest());
         args.push_back(op->getSource());
         args.push_back(op->getLength());
-        mem_func = (uintptr_t) memcpy;
+        if (llvm::isa<llvm::MemCpyInst>(inst)) {
+          mem_func = (uintptr_t) memcpy;
+        } else if (llvm::isa<llvm::MemMoveInst>(inst)) {
+          mem_func = (uintptr_t) memmove;
+        } else {
+          assert(!"Unknown MemTransferInst");
+        }
       } else if (llvm::MemSetInst *op =
                  llvm::dyn_cast<llvm::MemSetInst>(inst)) {
         arg_types.push_back(i8ptr);

@@ -456,9 +456,16 @@ void test_features() {
 
   {
     void (*funcp)(char *dest, char *src, size_t size);
-    GET_FUNC(funcp, "test_memcpy");
     char src[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
     char dest[8];
+
+    GET_FUNC(funcp, "test_memcpy");
+    memset(dest, 0, sizeof(dest));
+    funcp(dest, src, sizeof(src));
+    ASSERT_EQ(memcmp(dest, src, sizeof(src)), 0);
+
+    GET_FUNC(funcp, "test_memmove");
+    memset(dest, 0, sizeof(dest));
     funcp(dest, src, sizeof(src));
     ASSERT_EQ(memcmp(dest, src, sizeof(src)), 0);
   }
