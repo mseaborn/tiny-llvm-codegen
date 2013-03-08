@@ -630,7 +630,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       default:
         assert(!"Unknown binary operator");
     }
-  } else if (llvm::CmpInst *op = llvm::dyn_cast<llvm::CmpInst>(inst)) {
+  } else if (llvm::ICmpInst *op = llvm::dyn_cast<llvm::ICmpInst>(inst)) {
     llvm::Type *operand_type = op->getOperand(0)->getType();
     int bits;
     // TODO: Remove the use of pointer types via a rewrite pass instead.
