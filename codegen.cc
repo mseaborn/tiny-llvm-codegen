@@ -211,7 +211,7 @@ public:
     fprintf(stderr, "Warning: not handled: %s\n", desc);
     // pushl $desc
     put_byte(0x68);
-    put_uint32((uint32_t) desc);
+    put_uint32((uint32_t) strdup(desc));
     put_direct_call((uintptr_t) runtime_unhandled);
   }
 
@@ -884,8 +884,11 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     } else {
       codebuf.spill(REG_EAX, inst);
     }
-  } else if (llvm::isa<llvm::IntrinsicInst>(inst)) {
-    codebuf.unhandled_case("IntrinsicInst");
+  } else if (llvm::IntrinsicInst *op =
+             llvm::dyn_cast<llvm::IntrinsicInst>(inst)) {
+    std::string desc = "IntrinsicInst: ";
+    desc += op->getCalledValue()->getName();
+    codebuf.unhandled_case(desc.c_str());
   } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
     // We have already reserved space on the stack to store our
     // callee's argument.
