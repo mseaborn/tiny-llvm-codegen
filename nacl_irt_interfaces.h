@@ -36,6 +36,37 @@ struct nacl_irt_fdio {
   int (*getdents)(int fd, struct dirent *, size_t count, size_t *nread);
 };
 
+#define NACL_IRT_FILENAME_v0_1      "nacl-irt-filename-0.1"
+struct nacl_irt_filename {
+  int (*open)(const char *pathname, int oflag, mode_t cmode, int *newfd);
+  int (*stat)(const char *pathname, struct stat *);
+};
+
+#define NACL_IRT_MEMORY_v0_1    "nacl-irt-memory-0.1"
+struct nacl_irt_memory {
+  int (*sysbrk)(void **newbrk);
+  int (*mmap)(void **addr, size_t len, int prot, int flags, int fd, off_t off);
+  int (*munmap)(void *addr, size_t len);
+};
+
+#define NACL_IRT_DYNCODE_v0_1   "nacl-irt-dyncode-0.1"
+struct nacl_irt_dyncode {
+  int (*dyncode_create)(void *dest, const void *src, size_t size);
+  int (*dyncode_modify)(void *dest, const void *src, size_t size);
+  int (*dyncode_delete)(void *dest, size_t size);
+};
+
+#define NACL_IRT_TLS_v0_1       "nacl-irt-tls-0.1"
+struct nacl_irt_tls {
+  int (*tls_init)(void *thread_ptr);
+  void *(*tls_get)(void);
+};
+
+#define NACL_IRT_BLOCKHOOK_v0_1 "nacl-irt-blockhook-0.1"
+struct nacl_irt_blockhook {
+  int (*register_block_hooks)(void (*pre)(void), void (*post)(void));
+};
+
 typedef size_t (*TYPE_nacl_irt_query)(const char *interface_ident,
                                       void *table, size_t tablesize);
 

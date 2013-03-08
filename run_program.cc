@@ -10,10 +10,9 @@
 
 #define NACL_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
 
-struct nacl_irt_basic irt_basic;
-struct nacl_irt_fdio irt_fdio;
+static __thread void *tls_thread_ptr;
 
-int irt_write(int fd, const void *buf, size_t count, size_t *nwrote) {
+static int irt_write(int fd, const void *buf, size_t count, size_t *nwrote) {
   int result = write(fd, buf, count);
   if (result < 0)
     return -result;
@@ -21,9 +20,94 @@ int irt_write(int fd, const void *buf, size_t count, size_t *nwrote) {
   return 0;
 }
 
-void irt_exit(int status) {
+static void irt_exit(int status) {
   _exit(status);
 }
+
+static int tls_init(void *thread_ptr) {
+  tls_thread_ptr = thread_ptr;
+  return 0;
+}
+
+static void *tls_get() {
+  return tls_thread_ptr;
+}
+
+static void irt_stub_func(const char *name) {
+  fprintf(stderr, "Error: Unimplemented IRT function: %s\n", name);
+  abort();
+}
+
+#define DEFINE_STUB(name) \
+    static void irt_stub_##name() { irt_stub_func(#name); }
+#define USE_STUB(s, name) (typeof(s.name)) irt_stub_##name
+
+DEFINE_STUB(gettod)
+DEFINE_STUB(clock)
+DEFINE_STUB(nanosleep)
+DEFINE_STUB(sched_yield)
+DEFINE_STUB(sysconf)
+struct nacl_irt_basic irt_basic = {
+  irt_exit,
+  USE_STUB(irt_basic, gettod),
+  USE_STUB(irt_basic, clock),
+  USE_STUB(irt_basic, nanosleep),
+  USE_STUB(irt_basic, sched_yield),
+  USE_STUB(irt_basic, sysconf),
+};
+
+DEFINE_STUB(close)
+DEFINE_STUB(dup)
+DEFINE_STUB(dup2)
+DEFINE_STUB(read)
+DEFINE_STUB(seek)
+DEFINE_STUB(fstat)
+DEFINE_STUB(getdents)
+struct nacl_irt_fdio irt_fdio = {
+  USE_STUB(irt_fdio, close),
+  USE_STUB(irt_fdio, dup),
+  USE_STUB(irt_fdio, dup2),
+  USE_STUB(irt_fdio, read),
+  irt_write,
+  USE_STUB(irt_fdio, seek),
+  USE_STUB(irt_fdio, fstat),
+  USE_STUB(irt_fdio, getdents),
+};
+
+DEFINE_STUB(open)
+DEFINE_STUB(stat)
+struct nacl_irt_filename irt_filename = {
+  USE_STUB(irt_filename, open),
+  USE_STUB(irt_filename, stat),
+};
+
+DEFINE_STUB(sysbrk)
+DEFINE_STUB(mmap)
+DEFINE_STUB(munmap)
+struct nacl_irt_memory irt_memory = {
+  USE_STUB(irt_memory, sysbrk),
+  USE_STUB(irt_memory, mmap),
+  USE_STUB(irt_memory, munmap),
+};
+
+DEFINE_STUB(dyncode_create)
+DEFINE_STUB(dyncode_modify)
+DEFINE_STUB(dyncode_delete)
+struct nacl_irt_dyncode irt_dyncode = {
+  USE_STUB(irt_dyncode, dyncode_create),
+  USE_STUB(irt_dyncode, dyncode_modify),
+  USE_STUB(irt_dyncode, dyncode_delete),
+};
+
+struct nacl_irt_tls irt_tls = {
+  tls_init,
+  tls_get,
+};
+
+DEFINE_STUB(register_block_hooks)
+struct nacl_irt_blockhook irt_blockhook = {
+  USE_STUB(irt_blockhook, register_block_hooks),
+};
 
 struct nacl_interface_table {
   const char *name;
@@ -34,6 +118,11 @@ struct nacl_interface_table {
 static const struct nacl_interface_table irt_interfaces[] = {
   { NACL_IRT_BASIC_v0_1, &irt_basic, sizeof(irt_basic) },
   { NACL_IRT_FDIO_v0_1, &irt_fdio, sizeof(irt_fdio) },
+  { NACL_IRT_FILENAME_v0_1, &irt_filename, sizeof(irt_filename) },
+  { NACL_IRT_MEMORY_v0_1, &irt_memory, sizeof(irt_memory) },
+  { NACL_IRT_DYNCODE_v0_1, &irt_dyncode, sizeof(irt_dyncode) },
+  { NACL_IRT_TLS_v0_1, &irt_tls, sizeof(irt_tls) },
+  { NACL_IRT_BLOCKHOOK_v0_1, &irt_blockhook, sizeof(irt_blockhook) },
 };
 
 size_t irt_interface_query(const char *interface_ident,
@@ -49,6 +138,8 @@ size_t irt_interface_query(const char *interface_ident,
       break;
     }
   }
+  fprintf(stderr, "Warning: unavailable IRT interface queried: %s\n",
+          interface_ident);
   return 0;
 }
 
@@ -79,9 +170,6 @@ int main(int argc, char **argv) {
 
   std::map<std::string,uintptr_t> globals;
   translate(module, &globals);
-
-  irt_basic.exit = irt_exit;
-  irt_fdio.write = irt_write;
 
   struct startup_info info;
   info.cleanup_func = NULL;
