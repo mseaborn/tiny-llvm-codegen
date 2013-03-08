@@ -334,6 +334,12 @@ void test_features() {
   }
 
   {
+    void (*funcp)();
+    GET_FUNC(funcp, "test_lifetime_start_and_end");
+    funcp();
+  }
+
+  {
     int *(*funcp)(char *arg);
     GET_FUNC(funcp, "test_bitcast");
     ASSERT_EQ((uintptr_t) funcp((char *) 0x12345678), 0x12345678);

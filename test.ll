@@ -231,6 +231,16 @@ define i32 @test_alloca2() {
   ret i32 %1
 }
 
+declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
+declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind
+
+define void @test_lifetime_start_and_end() {
+  %addr = alloca i8
+  call void @llvm.lifetime.start(i64 1, i8* %addr)
+  call void @llvm.lifetime.end(i64 1, i8* %addr)
+  ret void
+}
+
 define i32* @test_bitcast(i8* %arg) {
   %1 = bitcast i8* %arg to i32*
   ret i32* %1

@@ -886,9 +886,15 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     }
   } else if (llvm::IntrinsicInst *op =
              llvm::dyn_cast<llvm::IntrinsicInst>(inst)) {
-    std::string desc = "IntrinsicInst: ";
-    desc += op->getCalledValue()->getName();
-    codebuf.unhandled_case(desc.c_str());
+    std::string name = op->getCalledValue()->getName();
+    if (name == "llvm.lifetime.start" ||
+        name == "llvm.lifetime.end") {
+      // Ignore.
+    } else {
+      std::string desc = "IntrinsicInst: ";
+      desc += name;
+      codebuf.unhandled_case(desc.c_str());
+    }
   } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
     // We have already reserved space on the stack to store our
     // callee's argument.
