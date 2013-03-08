@@ -98,6 +98,13 @@ void test_features() {
   }
 
   {
+    uint32_t (*funcp)();
+    GET_FUNC(funcp, "test_return_undef");
+    // Just check that the function is callable.
+    funcp();
+  }
+
+  {
     uint64_t (*funcp)(uint64_t arg1, uint64_t arg2);
     uint64_t value = 0x1234567887654321;
     GET_FUNC(funcp, "test_i64_arg1");

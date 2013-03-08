@@ -69,6 +69,12 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
   } else if (llvm::isa<llvm::ConstantPointerNull>(val)) {
     *result_global = NULL;
     *result_offset = 0;
+  } else if (llvm::isa<llvm::UndefValue>(val)) {
+    // Note that UndefValue could be handled in other places to
+    // optimise so that a variable is left uninitialized, although
+    // this will make the generated code behave less predictably.
+    *result_global = NULL;
+    *result_offset = 0;
   } else if (llvm::ConstantExpr *expr =
              llvm::dyn_cast<llvm::ConstantExpr>(val)) {
     if (expr->getOpcode() == llvm::Instruction::GetElementPtr) {
