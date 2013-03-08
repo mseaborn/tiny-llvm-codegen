@@ -50,7 +50,8 @@ bool is_i64(llvm::Type *ty) {
 
 void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
                      llvm::GlobalValue **result_global,
-                     uint64_t *result_offset) {
+                     uint64_t *result_offset,
+                     const char **result_unhandled) {
   if (llvm::GlobalValue *global = llvm::dyn_cast<llvm::GlobalValue>(val)) {
     *result_global = global;
     *result_offset = 0;
@@ -67,7 +68,7 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
              llvm::dyn_cast<llvm::ConstantExpr>(val)) {
     if (expr->getOpcode() == llvm::Instruction::GetElementPtr) {
       expand_constant(expr->getOperand(0), data_layout,
-                      result_global, result_offset);
+                      result_global, result_offset, result_unhandled);
       llvm::SmallVector<llvm::Value*,8> indexes(expr->op_begin() + 1,
                                                 expr->op_end());
       *result_offset += data_layout->getIndexedOffset(
@@ -78,10 +79,12 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
       // TODO: Do we need to truncate if a 64-bit constant is cast to
       // a pointer and back again?
       expand_constant(expr->getOperand(0), data_layout,
-                      result_global, result_offset);
+                      result_global, result_offset, result_unhandled);
     } else {
-      fprintf(stderr, "Unknown ConstantExpr: %s\n", expr->getOpcodeName());
-      assert(!"Unknown ConstantExpr");
+      // TODO: Handle remaining cases.
+      *result_unhandled = "Unknown ConstantExpr";
+      *result_global = NULL;
+      *result_offset = 0;
     }
   } else {
     // Note that some of the types below are handled by write_global().
@@ -186,6 +189,12 @@ public:
     return NULL;
   }
 
+  // TODO: Remove all uses of unhandled_case()!
+  void unhandled_case(const char *desc) {
+    fprintf(stderr, "Warning: not handled: %s\n", desc);
+    put_byte(0xf4); // hlt
+  }
+
   // Generate code to put |value| into |reg|.
   void move_to_reg(int reg, llvm::Value *value) {
     assert(!is_i64(value->getType()));
@@ -194,7 +203,12 @@ public:
     if (llvm::Constant *cval = llvm::dyn_cast<llvm::Constant>(value)) {
       llvm::GlobalValue *global;
       uint64_t offset;
-      expand_constant(cval, data_layout, &global, &offset);
+      const char *unhandled = NULL;
+      expand_constant(cval, data_layout, &global, &offset, &unhandled);
+      if (unhandled) {
+        unhandled_case(unhandled);
+        return;
+      }
       assert((uint32_t) offset == offset); // Sanity check.
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
@@ -223,7 +237,9 @@ public:
     if (llvm::Constant *cval = llvm::dyn_cast<llvm::Constant>(value)) {
       llvm::GlobalValue *global;
       uint64_t offset;
-      expand_constant(cval, data_layout, &global, &offset);
+      const char *unhandled = NULL;
+      expand_constant(cval, data_layout, &global, &offset, &unhandled);
+      assert(!unhandled);
       // Put constant in data segment.
       // TODO: We could intern these constants, or avoid taking their
       // address to start with.
@@ -397,12 +413,6 @@ public:
   std::vector<GlobalReloc> global_relocs;
 };
 
-// TODO: Remove all uses of unhandled_case()!
-void unhandled_case(CodeBuf *codebuf, const char *desc) {
-  fprintf(stderr, "Warning: not handled: %s\n", desc);
-  codebuf->put_byte(0xf4); // hlt
-}
-
 enum {
   REG_EAX = 0,
   REG_ECX,
@@ -466,7 +476,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
     int bits = inttype->getBitWidth();
     if (bits < 8) {
-      unhandled_case(&codebuf, "Arithmetic on i1");
+      codebuf.unhandled_case("Arithmetic on i1");
       return;
     }
     assert(bits >= 8); // Disallow i1
@@ -839,7 +849,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       codebuf.spill(REG_EAX, inst);
     }
   } else if (llvm::isa<llvm::IntrinsicInst>(inst)) {
-    unhandled_case(&codebuf, "IntrinsicInst");
+    codebuf.unhandled_case("IntrinsicInst");
   } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
     // We have already reserved space on the stack to store our
     // callee's argument.
@@ -895,7 +905,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
   } else if (codebuf.get_aliased_value(inst)) {
     // Nothing to do:  handled elsewhere.
   } else {
-    unhandled_case(&codebuf, get_instruction_type(inst));
+    codebuf.unhandled_case(get_instruction_type(inst));
   }
 }
 
@@ -949,7 +959,9 @@ void write_global(CodeBuf *codebuf, llvm::Constant *init) {
     // TODO: unify fully with expand_constant().
     llvm::GlobalValue *global;
     uint64_t offset;
-    expand_constant(init, codebuf->data_layout, &global, &offset);
+    const char *unhandled = NULL;
+    expand_constant(init, codebuf->data_layout, &global, &offset, &unhandled);
+    assert(!unhandled);
 
     uint32_t size = codebuf->data_layout->getTypeAllocSize(init->getType());
     if (global) {

@@ -439,6 +439,8 @@ void test_features() {
     ASSERT_EQ((uint32_t) funcp(), 123456);
   }
 
+  // TODO: Cover test_icmp_lt_constantexpr
+
   {
     void (*funcp)(char *dest, char *src, size_t size);
     GET_FUNC(funcp, "test_memcpy");

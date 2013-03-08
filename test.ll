@@ -306,6 +306,15 @@ define i8* @test_inttoptr_constantexpr() {
   ret i8* inttoptr (i32 123456 to i8*)
 }
 
+@var_to_compare1 = global i32 0
+@var_to_compare2 = global i32 0
+
+define i1 @test_icmp_lt_constantexpr() {
+  ; Don't use "icmp eq" here because it gets constant folded when reading
+  ; the bitcode!
+  ret i1 icmp ult (i32* @var_to_compare1, i32* @var_to_compare2)
+}
+
 declare void @llvm.memcpy.p0i8.p0i8.i32(i8*, i8*, i32, i32, i1)
 
 define void @test_memcpy(i8* %dest, i8* %src, i32 %size) {
