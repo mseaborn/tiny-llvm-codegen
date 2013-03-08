@@ -1,6 +1,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <sys/mman.h>
 
 #include <llvm/LLVMContext.h>
 #include <llvm/Support/IRReader.h>
@@ -11,6 +12,8 @@
 #define NACL_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
 
 static __thread void *tls_thread_ptr;
+static void *g_sysbrk_current;
+static void *g_sysbrk_max;
 
 static int irt_write(int fd, const void *buf, size_t count, size_t *nwrote) {
   int result = write(fd, buf, count);
@@ -31,6 +34,26 @@ static int tls_init(void *thread_ptr) {
 
 static void *tls_get() {
   return tls_thread_ptr;
+}
+
+static int irt_sysbrk(void **brk) {
+  if (!g_sysbrk_current) {
+    // The brk area is inherently limited, so having a cap here is
+    // somewhat reasonable, although it's wasteful to allocate a big
+    // chunk up front.
+    int size = 16 << 20; // 16MB
+    g_sysbrk_current = mmap(NULL, size, PROT_READ | PROT_WRITE,
+                            MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    assert(g_sysbrk_current != MAP_FAILED);
+    g_sysbrk_max = (void *) ((char *) g_sysbrk_current + size);
+  }
+  if (*brk == NULL) {
+    *brk = g_sysbrk_current;
+  } else {
+    assert(*brk <= g_sysbrk_max);
+    g_sysbrk_current = *brk;
+  }
+  return 0;
 }
 
 static void irt_stub_func(const char *name) {
@@ -81,11 +104,10 @@ struct nacl_irt_filename irt_filename = {
   USE_STUB(irt_filename, stat),
 };
 
-DEFINE_STUB(sysbrk)
 DEFINE_STUB(mmap)
 DEFINE_STUB(munmap)
 struct nacl_irt_memory irt_memory = {
-  USE_STUB(irt_memory, sysbrk),
+  irt_sysbrk,
   USE_STUB(irt_memory, mmap),
   USE_STUB(irt_memory, munmap),
 };
