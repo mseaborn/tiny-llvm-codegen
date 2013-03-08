@@ -115,8 +115,13 @@ class DataBuffer {
 
 public:
   DataBuffer(int prot) {
-    // TODO: Use an expandable buffer
-    int size = 0x4000;
+    // TODO: Use an expandable buffer.
+    // For now, allocating a large buffer means that we know the
+    // absolute address of a global variable (for example) at the
+    // point we generate it, before we finish generating all code and
+    // data.  This means we don't need to implement full relocations
+    // yet.
+    int size = 16 * 1024 * 1024; // 16MB
     buf_ = (char *) mmap(NULL, size, prot, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     assert(buf_ != MAP_FAILED);
     buf_end_ = buf_ + size;
