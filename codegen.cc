@@ -38,6 +38,12 @@ void dump_range_as_code(char *start, char *end) {
   system("objdump -D -b binary -m i386 tmp_data | grep '^ '");
 }
 
+// TODO: Remove all uses of unhandled_case()!
+void runtime_unhandled(const char *desc) {
+  fprintf(stderr, "Runtime fatal error: case not handled: %s\n", desc);
+  abort();
+}
+
 bool is_i64(llvm::Type *ty) {
   if (llvm::IntegerType *intty = llvm::dyn_cast<llvm::IntegerType>(ty)) {
     int bits = intty->getBitWidth();
@@ -203,7 +209,10 @@ public:
   // TODO: Remove all uses of unhandled_case()!
   void unhandled_case(const char *desc) {
     fprintf(stderr, "Warning: not handled: %s\n", desc);
-    put_byte(0xf4); // hlt
+    // pushl $desc
+    put_byte(0x68);
+    put_uint32((uint32_t) desc);
+    put_direct_call((uintptr_t) runtime_unhandled);
   }
 
   // Generate code to put |value| into |reg|.
@@ -291,6 +300,12 @@ public:
   void spill(int reg, llvm::Instruction *inst) {
     assert(!is_i64(inst->getType()));
     write_reg_to_ebp_offset(reg, stackslots[inst]);
+  }
+
+  void put_direct_call(uintptr_t func_addr) {
+    // Direct 32-bit call.
+    put_byte(0xe8);
+    put_uint32(func_addr - ((uintptr_t) get_current_pos() + sizeof(uint32_t)));
   }
 
   void put_ret() {
@@ -537,10 +552,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
         default:
           assert(!"Unknown binary operator");
       }
-      // Direct 32-bit call.
-      codebuf.put_byte(0xe8);
-      codebuf.put_uint32(func - ((uintptr_t) codebuf.get_current_pos()
-                                 + sizeof(uint32_t)));
+      codebuf.put_direct_call(func);
       return;
     }
 
@@ -677,10 +689,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
         default:
           assert(!"Unknown binary operator");
       }
-      // Direct 32-bit call.
-      codebuf.put_byte(0xe8);
-      codebuf.put_uint32(func - ((uintptr_t) codebuf.get_current_pos()
-                                 + sizeof(uint32_t)));
+      codebuf.put_direct_call(func);
       codebuf.spill(REG_EAX, inst);
       return;
     }
