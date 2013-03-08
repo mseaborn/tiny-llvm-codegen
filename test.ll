@@ -346,10 +346,17 @@ define i1 @test_icmp_lt_constantexpr() {
 }
 
 declare void @llvm.memcpy.p0i8.p0i8.i32(i8*, i8*, i32, i32, i1)
+declare void @llvm.memset.p0i8.i32(i8*, i8, i32, i32, i1)
 
 define void @test_memcpy(i8* %dest, i8* %src, i32 %size) {
   call void @llvm.memcpy.p0i8.p0i8.i32(i8* %dest, i8* %src, i32 %size,
-                                       i32 1, i1 0)
+                                       i32 1, i1 false)
+  ret void
+}
+
+define void @test_memset(i8* %dest, i8 %val, i32 %size) {
+  call void @llvm.memset.p0i8.i32(i8* %dest, i8 %val, i32 %size,
+                                  i32 1, i1 false)
   ret void
 }
 

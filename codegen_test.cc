@@ -463,6 +463,16 @@ void test_features() {
     ASSERT_EQ(memcmp(dest, src, sizeof(src)), 0);
   }
 
+  {
+    void (*funcp)(char *dest, char val, size_t size);
+    GET_FUNC(funcp, "test_memset");
+    char dest[8];
+    char comparison[8];
+    funcp(dest, 99, sizeof(dest));
+    memset(comparison, 99, sizeof(comparison));
+    ASSERT_EQ(memcmp(dest, comparison, sizeof(comparison)), 0);
+  }
+
   // TODO: Cover test_atomicrmw_xchg
 }
 

@@ -1026,35 +1026,51 @@ void write_global(CodeBuf *codebuf, llvm::Constant *init) {
 }
 
 // Expand memcpy intrinsic to a call to the host's memcpy() function.
+// Same for memset().
 // TODO: Expand this in the original bitcode file.
-void expand_memcpy(llvm::BasicBlock *bb) {
+void expand_mem_intrinsics(llvm::BasicBlock *bb) {
   for (llvm::BasicBlock::InstListType::iterator iter = bb->begin();
        iter != bb->end(); ) {
     llvm::Instruction *inst = iter++;
-    if (llvm::MemCpyInst *op = llvm::dyn_cast<llvm::MemCpyInst>(inst)) {
+    if (llvm::MemIntrinsic *op = llvm::dyn_cast<llvm::MemIntrinsic>(inst)) {
       llvm::Module *module = bb->getParent()->getParent();
       llvm::Type *i8 = llvm::Type::getInt8Ty(module->getContext());
+      // Note that we ignore op->getDestAddressSpace() and
+      // op->getSourceAddressSpace(): we only support one address
+      // space.
+      llvm::Type *i8ptr = i8->getPointerTo();
       llvm::Type *sizetype = llvm::Type::getInt32Ty(module->getContext());
       std::vector<llvm::Type*> arg_types;
-      arg_types.push_back(
-          llvm::PointerType::get(i8, op->getDestAddressSpace()));
-      arg_types.push_back(
-          llvm::PointerType::get(i8, op->getSourceAddressSpace()));
-      arg_types.push_back(sizetype);
-      llvm::Type *memcpy_type =
+      std::vector<llvm::Value*> args;
+      uintptr_t mem_func;
+      if (llvm::MemCpyInst *op = llvm::dyn_cast<llvm::MemCpyInst>(inst)) {
+        arg_types.push_back(i8ptr);
+        arg_types.push_back(i8ptr);
+        arg_types.push_back(sizetype);
+        args.push_back(op->getRawDest());
+        args.push_back(op->getSource());
+        args.push_back(op->getLength());
+        mem_func = (uintptr_t) memcpy;
+      } else if (llvm::MemSetInst *op =
+                 llvm::dyn_cast<llvm::MemSetInst>(inst)) {
+        arg_types.push_back(i8ptr);
+        arg_types.push_back(i8);
+        arg_types.push_back(sizetype);
+        args.push_back(op->getRawDest());
+        args.push_back(op->getValue());
+        args.push_back(op->getLength());
+        mem_func = (uintptr_t) memset;
+      } else {
+        assert(!"Unknown memory intrinsic");
+      }
+      llvm::Type *mem_func_type =
         llvm::PointerType::get(
             llvm::FunctionType::get(llvm::Type::getVoidTy(module->getContext()),
                                     arg_types, false), 0);
-
       llvm::Value *func = llvm::ConstantExpr::getIntToPtr(
-          llvm::ConstantInt::get(sizetype, (uintptr_t) memcpy),
-          memcpy_type);
+          llvm::ConstantInt::get(sizetype, mem_func), mem_func_type);
 
-      std::vector<llvm::Value*> args;
-      args.push_back(op->getRawDest());
-      args.push_back(op->getSource());
-      args.push_back(op->getLength());
-      // TODO: Support volatile copies.  The standard memcpy() is
+      // TODO: Support volatile operations.  The standard memcpy() is
       // non-volatile.
       assert(!op->isVolatile());
       llvm::Value *new_call =
@@ -1072,7 +1088,7 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
        bb != func->end();
        ++bb) {
     expand_gep->runOnBasicBlock(*bb);
-    expand_memcpy(bb);
+    expand_mem_intrinsics(bb);
     for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
          inst != bb->end();
          ++inst) {
