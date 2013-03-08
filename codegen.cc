@@ -61,6 +61,11 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
     *result_offset = cval->getZExtValue();
     // Check for possible truncation.
     assert(*result_offset == cval->getZExtValue());
+  } else if (llvm::isa<llvm::ConstantFP>(val)) {
+    // TODO: Handle ConstantFP.
+    *result_unhandled = "ConstantFP";
+    *result_global = NULL;
+    *result_offset = 0;
   } else if (llvm::isa<llvm::ConstantPointerNull>(val)) {
     *result_global = NULL;
     *result_offset = 0;

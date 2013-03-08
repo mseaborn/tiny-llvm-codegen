@@ -10,6 +10,10 @@ define i64 @test_return_i64() {
   ret i64 1234100100100
 }
 
+define double @test_return_double() {
+  ret double 123.456
+}
+
 define i64 @test_i64_arg1(i64 %arg1, i64 %arg2) {
   ret i64 %arg1
 }
