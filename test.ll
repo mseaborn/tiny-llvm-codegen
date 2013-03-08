@@ -131,6 +131,18 @@ return:
   ret i32 %2
 }
 
+define i64 @test_phi_i64(i64 %arg) {
+  %1 = icmp eq i64 %arg, 99
+  br i1 %1, label %iftrue, label %iffalse
+iftrue:
+  br label %return
+iffalse:
+  br label %return
+return:
+  %2 = phi i64 [ 123, %iftrue ], [ 456, %iffalse ]
+  ret i64 %2
+}
+
 define i32 @test_select(i32 %arg) {
   %1 = icmp eq i32 %arg, 99
   %2 = select i1 %1, i32 123, i32 456
