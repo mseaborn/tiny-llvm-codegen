@@ -317,3 +317,8 @@ define void @test_memcpy(i8* %dest, i8* %src, i32 %size) {
 define void @test_unreachable() {
   unreachable
 }
+
+define i32 @test_atomicrmw_xchg(i32* %ptr, i32 %val) {
+  %1 = atomicrmw xchg i32* %ptr, i32 %val seq_cst
+  ret i32 %1
+}

@@ -447,6 +447,8 @@ void test_features() {
     funcp(dest, src, sizeof(src));
     ASSERT_EQ(memcmp(dest, src, sizeof(src)), 0);
   }
+
+  // TODO: Cover test_atomicrmw_xchg
 }
 
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))

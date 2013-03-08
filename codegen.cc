@@ -397,6 +397,12 @@ public:
   std::vector<GlobalReloc> global_relocs;
 };
 
+// TODO: Remove all uses of unhandled_case()!
+void unhandled_case(CodeBuf *codebuf, const char *desc) {
+  fprintf(stderr, "Warning: not handled: %s\n", desc);
+  codebuf->put_byte(0xf4); // hlt
+}
+
 enum {
   REG_EAX = 0,
   REG_ECX,
@@ -459,6 +465,10 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
     llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
     int bits = inttype->getBitWidth();
+    if (bits < 8) {
+      unhandled_case(&codebuf, "Arithmetic on i1");
+      return;
+    }
     assert(bits >= 8); // Disallow i1
     if (bits == 64) {
       // Generate function call to helper function.
@@ -828,6 +838,8 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     } else {
       codebuf.spill(REG_EAX, inst);
     }
+  } else if (llvm::isa<llvm::IntrinsicInst>(inst)) {
+    unhandled_case(&codebuf, "IntrinsicInst");
   } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
     // We have already reserved space on the stack to store our
     // callee's argument.
@@ -883,9 +895,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
   } else if (codebuf.get_aliased_value(inst)) {
     // Nothing to do:  handled elsewhere.
   } else {
-    fprintf(stderr, "Unknown instruction type: %s\n",
-            get_instruction_type(inst));
-    assert(0);
+    unhandled_case(&codebuf, get_instruction_type(inst));
   }
 }
 
