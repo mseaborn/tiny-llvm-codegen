@@ -492,13 +492,6 @@ void test_features() {
   }
 
   {
-    void *(*funcp)();
-    GET_FUNC(funcp, "test_nacl_read_tp");
-    runtime_tls_init((void *) 0x12345);
-    ASSERT_EQ((uintptr_t) funcp(), 0x12345);
-  }
-
-  {
     void (*funcp)(char *dest, char val, size_t size);
     char dest[8];
     char comparison[8];
@@ -514,6 +507,13 @@ void test_features() {
     funcp(dest, 99, sizeof(dest));
     memset(comparison, 99, sizeof(comparison));
     ASSERT_EQ(memcmp(dest, comparison, sizeof(comparison)), 0);
+  }
+
+  {
+    void *(*funcp)();
+    GET_FUNC(funcp, "test_nacl_read_tp");
+    runtime_tls_init((void *) 0x12345);
+    ASSERT_EQ((uintptr_t) funcp(), 0x12345);
   }
 
   // TODO: Cover test_atomicrmw_xchg
