@@ -7,6 +7,7 @@
 
 #include <map>
 
+#include <llvm/Analysis/Verifier.h>
 #include <llvm/Constants.h>
 #include <llvm/InstrTypes.h>
 #include <llvm/Instructions.h>
@@ -1237,6 +1238,8 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals,
   }
   codebuf.apply_jump_relocs();
   codebuf.apply_global_relocs();
+
+  llvm::verifyModule(*module);
 
   for (std::map<llvm::GlobalValue*,uint32_t>::iterator global =
          codebuf.globals.begin();
