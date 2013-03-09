@@ -173,11 +173,23 @@ int main(int argc, char **argv) {
   llvm::SMDiagnostic err;
   llvm::LLVMContext &context = llvm::getGlobalContext();
 
-  if (argc != 2) {
-    fprintf(stderr, "Usage: %s <bitcode-file>\n", argv[0]);
+  CodeGenOptions options;
+  const char *prog_name = argv[0];
+  int arg = 1;
+  while (arg < argc) {
+    if (!strcmp(argv[arg], "--trace")) {
+      options.trace_logging = true;
+      arg++;
+    } else {
+      break;
+    }
+  }
+
+  if (arg + 1 != argc) {
+    fprintf(stderr, "Usage: %s <bitcode-file>\n", prog_name);
     return 1;
   }
-  const char *filename = argv[1];
+  const char *filename = argv[arg];
   llvm::Module *module = llvm::ParseIRFile(filename, err, context);
   if (!module) {
     fprintf(stderr, "failed to read file: %s\n", filename);
@@ -185,8 +197,6 @@ int main(int argc, char **argv) {
   }
 
   std::map<std::string,uintptr_t> globals;
-  CodeGenOptions options;
-  options.trace_logging = true;
   translate(module, &globals, &options);
 
   struct startup_info info;
