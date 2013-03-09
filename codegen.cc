@@ -1134,18 +1134,24 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
   int frame_size = codebuf.frame_vars_size + codebuf.frame_callees_args_size;
 
   char *function_entry = codebuf.get_current_pos();
-  // Prolog:
-  codebuf.put_byte(0x55); // pushl %ebp
-  codebuf.put_code(TEMPL("\x89\xe5")); // movl %esp, %ebp
-  // subl $frame_size, %esp
-  codebuf.put_byte(0x81);
-  codebuf.put_byte(0xec);
-  codebuf.put_uint32(frame_size);
+  if (func->empty()) {
+    std::string msg = "Function declared but not defined: ";
+    msg += func->getName();
+    codebuf.unhandled_case(msg.c_str());
+  } else {
+    // Prolog:
+    codebuf.put_byte(0x55); // pushl %ebp
+    codebuf.put_code(TEMPL("\x89\xe5")); // movl %esp, %ebp
+    // subl $frame_size, %esp
+    codebuf.put_byte(0x81);
+    codebuf.put_byte(0xec);
+    codebuf.put_uint32(frame_size);
 
-  for (llvm::Function::iterator bb = func->begin();
-       bb != func->end();
-       ++bb) {
-    translate_bb(bb, codebuf);
+    for (llvm::Function::iterator bb = func->begin();
+         bb != func->end();
+         ++bb) {
+      translate_bb(bb, codebuf);
+    }
   }
 
   printf("%s:\n", func->getName().str().c_str());
