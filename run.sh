@@ -18,6 +18,7 @@ python test_generate_code.py > gen_arithmetic_test.c
 gcc -O1 -m32 -c gen_arithmetic_test.c
 clang -O1 -m32 -c gen_arithmetic_test.c -emit-llvm -o gen_arithmetic_test.ll
 
+g++ -m32 $cflags -c expand_constantexpr.cc
 g++ -m32 $cflags -c expand_getelementptr.cc
 g++ -m32 $cflags -c codegen.cc
 g++ -m32 $cflags -c codegen_test.cc
@@ -25,6 +26,7 @@ g++ -m32 $cflags -c run_program.cc
 g++ -m32 $cflags -c -O2 runtime_helpers.c
 
 lib="
+  expand_constantexpr.o
   expand_getelementptr.o
   codegen.o
   runtime_helpers.o"

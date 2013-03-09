@@ -16,6 +16,7 @@
 // In LLVM 3.2, this becomes <llvm/DataLayout.h>
 #include <llvm/Target/TargetData.h>
 
+#include "expand_constantexpr.h"
 #include "expand_getelementptr.h"
 #include "runtime_helpers.h"
 
@@ -1089,11 +1090,14 @@ void expand_mem_intrinsics(llvm::BasicBlock *bb) {
 }
 
 void translate_function(llvm::Function *func, CodeBuf &codebuf) {
+  llvm::BasicBlockPass *expand_constantexpr = createExpandConstantExprPass();
   llvm::BasicBlockPass *expand_gep = createExpandGetElementPtrPass();
+
   int callees_args_size = kMinCalleeArgsSize;
   for (llvm::Function::iterator bb = func->begin();
        bb != func->end();
        ++bb) {
+    expand_constantexpr->runOnBasicBlock(*bb);
     expand_gep->runOnBasicBlock(*bb);
     expand_mem_intrinsics(bb);
     for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
@@ -1164,6 +1168,7 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
 
   codebuf.globals[func] = (uintptr_t) function_entry;
 
+  delete expand_constantexpr;
   delete expand_gep;
 }
 

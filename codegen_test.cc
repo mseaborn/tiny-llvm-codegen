@@ -453,7 +453,11 @@ void test_features() {
     ASSERT_EQ((uint32_t) funcp(), 123456);
   }
 
-  // TODO: Cover test_icmp_lt_constantexpr
+  {
+    char (*funcp)();
+    GET_FUNC(funcp, "test_icmp_lt_constantexpr");
+    ASSERT_EQ(funcp(), globals["var_to_compare1"] < globals["var_to_compare2"]);
+  }
 
   {
     void (*funcp)(char *dest, char *src, size_t size);
