@@ -461,6 +461,12 @@ void test_features() {
   }
 
   {
+    uint32_t (*funcp)();
+    GET_FUNC(funcp, "test_add_constantexpr");
+    ASSERT_EQ(funcp(), globals["var_to_compare1"] + globals["var_to_compare2"]);
+  }
+
+  {
     void (*funcp)(char *dest, char *src, size_t size);
     char src[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
     char dest[8];

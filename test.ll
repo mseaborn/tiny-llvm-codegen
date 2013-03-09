@@ -345,6 +345,16 @@ define i1 @test_icmp_lt_constantexpr() {
   ret i1 icmp ult (i32* @var_to_compare1, i32* @var_to_compare2)
 }
 
+; This tests that ExpandConstantExpr handles PHI nodes correctly.
+define i32 @test_add_constantexpr() {
+entry:
+  br label %label
+label:
+  %val = phi i32 [ add (i32 ptrtoint (i32* @var_to_compare1 to i32),
+                        i32 ptrtoint (i32* @var_to_compare2 to i32)), %entry ]
+  ret i32 %val
+}
+
 declare void @llvm.memcpy.p0i8.p0i8.i32(i8*, i8*, i32, i32, i1)
 declare void @llvm.memmove.p0i8.p0i8.i32(i8*, i8*, i32, i32, i1)
 declare void @llvm.memset.p0i8.i32(i8*, i8, i32, i32, i1)

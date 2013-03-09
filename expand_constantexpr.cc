@@ -101,7 +101,14 @@ bool ExpandConstantExpr::runOnBasicBlock(BasicBlock &bb) {
           dyn_cast<ConstantExpr>(inst->getOperand(opnum))) {
         modified = true;
         Instruction *new_inst = getConstantExprAsInstruction(expr);
-        new_inst->insertBefore(inst);
+        Instruction *insert_pt = inst;
+        if (PHINode *pn = dyn_cast<PHINode>(insert_pt)) {
+          // We cannot insert instructions before a PHI node, so
+          // insert before the incoming block's terminator.  This
+          // could be suboptimal if the terminator is a conditional.
+          insert_pt = pn->getIncomingBlock(opnum)->getTerminator();
+        }
+        new_inst->insertBefore(insert_pt);
         new_inst->setName("expanded");
         inst->replaceUsesOfWith(expr, new_inst);
       }
