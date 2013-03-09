@@ -1073,7 +1073,7 @@ void expand_mem_intrinsics(llvm::BasicBlock *bb) {
         arg_types.push_back(i8ptr);
         arg_types.push_back(sizetype);
         args.push_back(op->getRawDest());
-        args.push_back(op->getSource());
+        args.push_back(op->getRawSource());
         args.push_back(op->getLength());
         if (llvm::isa<llvm::MemCpyInst>(inst)) {
           mem_func = (uintptr_t) memcpy;
