@@ -346,12 +346,35 @@ define i1 @test_icmp_lt_constantexpr() {
 }
 
 ; This tests that ExpandConstantExpr handles PHI nodes correctly.
-define i32 @test_add_constantexpr() {
+define i32 @test_add_constantexpr_phi1() {
 entry:
   br label %label
 label:
   %val = phi i32 [ add (i32 ptrtoint (i32* @var_to_compare1 to i32),
                         i32 ptrtoint (i32* @var_to_compare2 to i32)), %entry ]
+  ret i32 %val
+}
+
+; This tests that ExpandConstantExpr correctly handles a PHI node that
+; contains the same ConstantExpr twice.
+; Using replaceAllUsesWith() is not correct on a PHI node when the
+; new instruction has to be added to an incoming block.
+define i32 @test_add_constantexpr_phi2(i32 %arg) {
+entry:
+  switch i32 %arg, label %exit [
+    i32 1, label %match1
+    i32 2, label %match2
+  ]
+match1:
+  br label %exit
+match2:
+  br label %exit
+exit:
+  %val = phi i32 [ add (i32 ptrtoint (i32* @var_to_compare1 to i32),
+                        i32 ptrtoint (i32* @var_to_compare2 to i32)), %match1 ],
+                 [ add (i32 ptrtoint (i32* @var_to_compare1 to i32),
+                        i32 ptrtoint (i32* @var_to_compare2 to i32)), %match2 ],
+                 [ 456, %entry ]
   ret i32 %val
 }
 

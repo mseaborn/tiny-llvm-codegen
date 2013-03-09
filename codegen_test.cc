@@ -462,8 +462,17 @@ void test_features() {
 
   {
     uint32_t (*funcp)();
-    GET_FUNC(funcp, "test_add_constantexpr");
+    GET_FUNC(funcp, "test_add_constantexpr_phi1");
     ASSERT_EQ(funcp(), globals["var_to_compare1"] + globals["var_to_compare2"]);
+  }
+
+  {
+    uint32_t (*funcp)(int arg);
+    GET_FUNC(funcp, "test_add_constantexpr_phi2");
+    uintptr_t sum = globals["var_to_compare1"] + globals["var_to_compare2"];
+    ASSERT_EQ(funcp(1), sum);
+    ASSERT_EQ(funcp(2), sum);
+    ASSERT_EQ(funcp(3), 456);
   }
 
   {

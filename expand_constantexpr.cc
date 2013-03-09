@@ -110,7 +110,7 @@ bool ExpandConstantExpr::runOnBasicBlock(BasicBlock &bb) {
         }
         new_inst->insertBefore(insert_pt);
         new_inst->setName("expanded");
-        inst->replaceUsesOfWith(expr, new_inst);
+        inst->setOperand(opnum, new_inst);
       }
     }
   }
