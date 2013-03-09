@@ -336,13 +336,21 @@ define i8* @test_inttoptr_constantexpr() {
   ret i8* inttoptr (i32 123456 to i8*)
 }
 
-@var_to_compare1 = global i32 0
-@var_to_compare2 = global i32 0
+@constexpr_var1 = global i32 0
+@constexpr_var2 = global i32 0
+@constexpr_var3 = global i32 0
 
 define i1 @test_icmp_lt_constantexpr() {
   ; Don't use "icmp eq" here because it gets constant folded when reading
   ; the bitcode!
-  ret i1 icmp ult (i32* @var_to_compare1, i32* @var_to_compare2)
+  ret i1 icmp ult (i32* @constexpr_var1, i32* @constexpr_var2)
+}
+
+; Test that ConstantExprs are expanded out recursively.
+define i32 @test_add_constantexpr_nested() {
+  ret i32 add (i32 ptrtoint (i32* @constexpr_var1 to i32),
+               i32 add (i32 ptrtoint (i32* @constexpr_var2 to i32),
+                        i32 ptrtoint (i32* @constexpr_var3 to i32)))
 }
 
 ; This tests that ExpandConstantExpr handles PHI nodes correctly.
@@ -350,8 +358,8 @@ define i32 @test_add_constantexpr_phi1() {
 entry:
   br label %label
 label:
-  %val = phi i32 [ add (i32 ptrtoint (i32* @var_to_compare1 to i32),
-                        i32 ptrtoint (i32* @var_to_compare2 to i32)), %entry ]
+  %val = phi i32 [ add (i32 ptrtoint (i32* @constexpr_var1 to i32),
+                        i32 ptrtoint (i32* @constexpr_var2 to i32)), %entry ]
   ret i32 %val
 }
 
@@ -370,10 +378,10 @@ match1:
 match2:
   br label %exit
 exit:
-  %val = phi i32 [ add (i32 ptrtoint (i32* @var_to_compare1 to i32),
-                        i32 ptrtoint (i32* @var_to_compare2 to i32)), %match1 ],
-                 [ add (i32 ptrtoint (i32* @var_to_compare1 to i32),
-                        i32 ptrtoint (i32* @var_to_compare2 to i32)), %match2 ],
+  %val = phi i32 [ add (i32 ptrtoint (i32* @constexpr_var1 to i32),
+                        i32 ptrtoint (i32* @constexpr_var2 to i32)), %match1 ],
+                 [ add (i32 ptrtoint (i32* @constexpr_var1 to i32),
+                        i32 ptrtoint (i32* @constexpr_var2 to i32)), %match2 ],
                  [ 456, %entry ]
   ret i32 %val
 }

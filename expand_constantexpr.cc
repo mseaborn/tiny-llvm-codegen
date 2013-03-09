@@ -12,6 +12,8 @@
 
 using namespace llvm;
 
+Value *expandConstantExpr(Value *Val, Instruction *InsertPt);
+
 namespace {
   class ExpandConstantExpr : public BasicBlockPass {
   public:
@@ -25,14 +27,15 @@ namespace {
 
 char ExpandConstantExpr::ID = 0;
 
-// Copied from ConstantExpr::getAsInstruction() in lib/VMCore/Constants.cpp.
+// Based on ConstantExpr::getAsInstruction() in lib/VMCore/Constants.cpp.
 // TODO: Use getAsInstruction() when we require a newer LLVM version.
-Instruction *getConstantExprAsInstruction(ConstantExpr *CE) {
+Instruction *getConstantExprAsInstruction(ConstantExpr *CE,
+                                          Instruction *InsertPt) {
   SmallVector<Value*,4> ValueOperands;
   for (ConstantExpr::op_iterator I = CE->op_begin(), E = CE->op_end();
        I != E;
        ++I)
-    ValueOperands.push_back(cast<Value>(I));
+    ValueOperands.push_back(expandConstantExpr(cast<Value>(I), InsertPt));
 
   ArrayRef<Value*> Ops(ValueOperands);
 
@@ -91,6 +94,16 @@ Instruction *getConstantExprAsInstruction(ConstantExpr *CE) {
   }
 }
 
+Value *expandConstantExpr(Value *Val, Instruction *InsertPt) {
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Val)) {
+    Instruction *NewInst = getConstantExprAsInstruction(CE, InsertPt);
+    NewInst->insertBefore(InsertPt);
+    NewInst->setName("expanded");
+    return NewInst;
+  }
+  return Val;
+}
+
 bool ExpandConstantExpr::runOnBasicBlock(BasicBlock &bb) {
   bool modified = false;
   for (BasicBlock::InstListType::iterator inst = bb.begin();
@@ -100,7 +113,6 @@ bool ExpandConstantExpr::runOnBasicBlock(BasicBlock &bb) {
       if (ConstantExpr *expr =
           dyn_cast<ConstantExpr>(inst->getOperand(opnum))) {
         modified = true;
-        Instruction *new_inst = getConstantExprAsInstruction(expr);
         Instruction *insert_pt = inst;
         if (PHINode *pn = dyn_cast<PHINode>(insert_pt)) {
           // We cannot insert instructions before a PHI node, so
@@ -108,9 +120,7 @@ bool ExpandConstantExpr::runOnBasicBlock(BasicBlock &bb) {
           // could be suboptimal if the terminator is a conditional.
           insert_pt = pn->getIncomingBlock(opnum)->getTerminator();
         }
-        new_inst->insertBefore(insert_pt);
-        new_inst->setName("expanded");
-        inst->setOperand(opnum, new_inst);
+        inst->setOperand(opnum, expandConstantExpr(expr, insert_pt));
       }
     }
   }
