@@ -8,8 +8,10 @@
 
 class CodeGenOptions {
 public:
-  CodeGenOptions(): trace_logging(false) {}
+  CodeGenOptions(): dump_code(false), trace_logging(false) {}
 
+  // Output disassembly of each function that is generated, using objdump.
+  bool dump_code;
   // Generate code with log messages to trace execution.
   bool trace_logging;
 };

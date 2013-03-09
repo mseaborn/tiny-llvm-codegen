@@ -177,7 +177,10 @@ int main(int argc, char **argv) {
   const char *prog_name = argv[0];
   int arg = 1;
   while (arg < argc) {
-    if (!strcmp(argv[arg], "--trace")) {
+    if (!strcmp(argv[arg], "--dump")) {
+      options.dump_code = true;
+      arg++;
+    } else if (!strcmp(argv[arg], "--trace")) {
       options.trace_logging = true;
       arg++;
     } else {

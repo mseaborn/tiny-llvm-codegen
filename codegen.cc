@@ -1195,9 +1195,11 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
     }
   }
 
-  printf("%s:\n", func->getName().str().c_str());
-  fflush(stdout);
-  dump_range_as_code(function_entry, codebuf.get_current_pos());
+  if (codebuf.options->dump_code) {
+    printf("%s:\n", func->getName().str().c_str());
+    fflush(stdout);
+    dump_range_as_code(function_entry, codebuf.get_current_pos());
+  }
 
   codebuf.globals[func] = (uintptr_t) function_entry;
 
