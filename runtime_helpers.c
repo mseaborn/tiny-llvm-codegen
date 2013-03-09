@@ -1,6 +1,17 @@
 
 #include "runtime_helpers.h"
 
+static __thread void *tls_thread_ptr;
+
+int runtime_tls_init(void *thread_ptr) {
+  tls_thread_ptr = thread_ptr;
+  return 0;
+}
+
+void *runtime_tls_get(void) {
+  return tls_thread_ptr;
+}
+
 void runtime_i64_Add(uint64_t *result, uint64_t *arg1, uint64_t *arg2) {
   *result = *arg1 + *arg2;
 }

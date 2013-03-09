@@ -8,10 +8,10 @@
 
 #include "codegen.h"
 #include "nacl_irt_interfaces.h"
+#include "runtime_helpers.h"
 
 #define NACL_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
 
-static __thread void *tls_thread_ptr;
 static void *g_sysbrk_current;
 static void *g_sysbrk_max;
 
@@ -25,15 +25,6 @@ static int irt_write(int fd, const void *buf, size_t count, size_t *nwrote) {
 
 static void irt_exit(int status) {
   _exit(status);
-}
-
-static int tls_init(void *thread_ptr) {
-  tls_thread_ptr = thread_ptr;
-  return 0;
-}
-
-static void *tls_get() {
-  return tls_thread_ptr;
 }
 
 static int irt_sysbrk(void **brk) {
@@ -122,8 +113,8 @@ struct nacl_irt_dyncode irt_dyncode = {
 };
 
 struct nacl_irt_tls irt_tls = {
-  tls_init,
-  tls_get,
+  runtime_tls_init,
+  runtime_tls_get,
 };
 
 DEFINE_STUB(register_block_hooks)

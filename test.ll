@@ -367,6 +367,13 @@ define void @test_memset(i8* %dest, i8 %val, i32 %size) {
   ret void
 }
 
+declare i8* @llvm.nacl.read.tp()
+
+define i8* @test_nacl_read_tp() {
+  %1 = call i8* @llvm.nacl.read.tp()
+  ret i8* %1
+}
+
 define void @test_unreachable() {
   unreachable
 }

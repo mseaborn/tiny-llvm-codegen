@@ -8,6 +8,9 @@
 extern "C" {
 #endif
 
+int runtime_tls_init(void *thread_ptr);
+void *runtime_tls_get(void);
+
 void runtime_i64_Add(uint64_t *result, uint64_t *arg1, uint64_t *arg2);
 void runtime_i64_Sub(uint64_t *result, uint64_t *arg1, uint64_t *arg2);
 void runtime_i64_Mul(uint64_t *result, uint64_t *arg1, uint64_t *arg2);

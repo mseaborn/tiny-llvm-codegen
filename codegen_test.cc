@@ -8,6 +8,7 @@
 
 #include "arithmetic_test.h"
 #include "codegen.h"
+#include "runtime_helpers.h"
 
 void my_assert(int64_t val1, int64_t val2, const char *expr1, const char *expr2,
                const char *file, int line_number) {
@@ -468,6 +469,13 @@ void test_features() {
     memset(dest, 0, sizeof(dest));
     funcp(dest, src, sizeof(src));
     ASSERT_EQ(memcmp(dest, src, sizeof(src)), 0);
+  }
+
+  {
+    void *(*funcp)();
+    GET_FUNC(funcp, "test_nacl_read_tp");
+    runtime_tls_init((void *) 0x12345);
+    ASSERT_EQ((uintptr_t) funcp(), 0x12345);
   }
 
   {

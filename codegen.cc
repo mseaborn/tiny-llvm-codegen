@@ -1135,9 +1135,13 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
 
   char *function_entry = codebuf.get_current_pos();
   if (func->empty()) {
-    std::string msg = "Function declared but not defined: ";
-    msg += func->getName();
-    codebuf.unhandled_case(msg.c_str());
+    if (func->getName() == "llvm.nacl.read.tp") {
+      function_entry = (char *) runtime_tls_get;
+    } else {
+      std::string msg = "Function declared but not defined: ";
+      msg += func->getName();
+      codebuf.unhandled_case(msg.c_str());
+    }
   } else {
     // Prolog:
     codebuf.put_byte(0x55); // pushl %ebp
