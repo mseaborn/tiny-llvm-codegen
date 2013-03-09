@@ -485,6 +485,12 @@ void test_features() {
   }
 
   {
+    int *(*funcp)();
+    GET_FUNC(funcp, "test_getelementptr_constantexpr_phi");
+    ASSERT_EQ((uintptr_t) (funcp() - 1), globals["constexpr_var1"]);
+  }
+
+  {
     void (*funcp)(char *dest, char *src, size_t size);
     char src[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
     char dest[8];

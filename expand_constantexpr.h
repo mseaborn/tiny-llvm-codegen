@@ -4,6 +4,6 @@
 
 #include <llvm/Pass.h>
 
-llvm::BasicBlockPass *createExpandConstantExprPass();
+llvm::FunctionPass *createExpandConstantExprPass();
 
 #endif

@@ -1119,14 +1119,14 @@ void expand_mem_intrinsics(llvm::BasicBlock *bb) {
 }
 
 void translate_function(llvm::Function *func, CodeBuf &codebuf) {
-  llvm::BasicBlockPass *expand_constantexpr = createExpandConstantExprPass();
+  llvm::FunctionPass *expand_constantexpr = createExpandConstantExprPass();
   llvm::BasicBlockPass *expand_gep = createExpandGetElementPtrPass();
 
   int callees_args_size = kMinCalleeArgsSize;
+  expand_constantexpr->runOnFunction(*func);
   for (llvm::Function::iterator bb = func->begin();
        bb != func->end();
        ++bb) {
-    expand_constantexpr->runOnBasicBlock(*bb);
     expand_gep->runOnBasicBlock(*bb);
     expand_mem_intrinsics(bb);
     for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();

@@ -12,16 +12,18 @@
 
 using namespace llvm;
 
-Value *expandConstantExpr(Value *Val, Instruction *InsertPt);
+static Value *expandConstantExpr(Value *Val, Instruction *InsertPt);
 
 namespace {
-  class ExpandConstantExpr : public BasicBlockPass {
+  // This is a FunctionPass because our handling of PHI nodes means
+  // that our modifications may cross BasicBlocks.
+  class ExpandConstantExpr : public FunctionPass {
   public:
     static char ID; // Pass identification, replacement for typeid
-    ExpandConstantExpr() : BasicBlockPass(ID) {
+    ExpandConstantExpr() : FunctionPass(ID) {
     }
 
-    virtual bool runOnBasicBlock(BasicBlock &bb);
+    virtual bool runOnFunction(Function &func);
   };
 }
 
@@ -29,8 +31,8 @@ char ExpandConstantExpr::ID = 0;
 
 // Based on ConstantExpr::getAsInstruction() in lib/VMCore/Constants.cpp.
 // TODO: Use getAsInstruction() when we require a newer LLVM version.
-Instruction *getConstantExprAsInstruction(ConstantExpr *CE,
-                                          Instruction *InsertPt) {
+static Instruction *getConstantExprAsInstruction(ConstantExpr *CE,
+                                                 Instruction *InsertPt) {
   SmallVector<Value*,4> ValueOperands;
   for (ConstantExpr::op_iterator I = CE->op_begin(), E = CE->op_end();
        I != E;
@@ -94,7 +96,7 @@ Instruction *getConstantExprAsInstruction(ConstantExpr *CE,
   }
 }
 
-Value *expandConstantExpr(Value *Val, Instruction *InsertPt) {
+static Value *expandConstantExpr(Value *Val, Instruction *InsertPt) {
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Val)) {
     Instruction *NewInst = getConstantExprAsInstruction(CE, InsertPt);
     NewInst->insertBefore(InsertPt);
@@ -104,29 +106,39 @@ Value *expandConstantExpr(Value *Val, Instruction *InsertPt) {
   return Val;
 }
 
-bool ExpandConstantExpr::runOnBasicBlock(BasicBlock &bb) {
+static bool expandInstruction(Instruction *inst) {
   bool modified = false;
-  for (BasicBlock::InstListType::iterator inst = bb.begin();
-       inst != bb.end();
-       ++inst) {
-    for (unsigned opnum = 0; opnum < inst->getNumOperands(); opnum++) {
-      if (ConstantExpr *expr =
-          dyn_cast<ConstantExpr>(inst->getOperand(opnum))) {
-        modified = true;
-        Instruction *insert_pt = inst;
-        if (PHINode *pn = dyn_cast<PHINode>(insert_pt)) {
-          // We cannot insert instructions before a PHI node, so
-          // insert before the incoming block's terminator.  This
-          // could be suboptimal if the terminator is a conditional.
-          insert_pt = pn->getIncomingBlock(opnum)->getTerminator();
-        }
-        inst->setOperand(opnum, expandConstantExpr(expr, insert_pt));
+  for (unsigned opnum = 0; opnum < inst->getNumOperands(); opnum++) {
+    if (ConstantExpr *expr =
+        dyn_cast<ConstantExpr>(inst->getOperand(opnum))) {
+      modified = true;
+      Instruction *insert_pt = inst;
+      if (PHINode *pn = dyn_cast<PHINode>(insert_pt)) {
+        // We cannot insert instructions before a PHI node, so insert
+        // before the incoming block's terminator.  This could be
+        // suboptimal if the terminator is a conditional.
+        insert_pt = pn->getIncomingBlock(opnum)->getTerminator();
       }
+      inst->setOperand(opnum, expandConstantExpr(expr, insert_pt));
     }
   }
   return modified;
 }
 
-BasicBlockPass *createExpandConstantExprPass() {
+bool ExpandConstantExpr::runOnFunction(Function &func) {
+  bool modified = false;
+  for (llvm::Function::iterator bb = func.begin();
+       bb != func.end();
+       ++bb) {
+    for (BasicBlock::InstListType::iterator inst = bb->begin();
+         inst != bb->end();
+         ++inst) {
+      modified |= expandInstruction(inst);
+    }
+  }
+  return modified;
+}
+
+FunctionPass *createExpandConstantExprPass() {
   return new ExpandConstantExpr();
 }

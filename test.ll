@@ -386,6 +386,16 @@ exit:
   ret i32 %val
 }
 
+; Check that getelementptr is expanded out correctly when it appears
+; in a phi node.
+define i32* @test_getelementptr_constantexpr_phi() {
+entry:
+  br label %done
+done:
+  %val = phi i32* [ getelementptr (i32* @constexpr_var1, i32 1), %entry ]
+  ret i32* %val
+}
+
 declare void @llvm.memcpy.p0i8.p0i8.i32(i8*, i8*, i32, i32, i1)
 declare void @llvm.memmove.p0i8.p0i8.i32(i8*, i8*, i32, i32, i1)
 declare void @llvm.memset.p0i8.i32(i8*, i8, i32, i32, i1)
