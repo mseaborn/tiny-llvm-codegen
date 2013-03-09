@@ -23,6 +23,10 @@ static int irt_write(int fd, const void *buf, size_t count, size_t *nwrote) {
   return 0;
 }
 
+static int irt_fstat(int fd, struct stat *st) {
+  return -ENOSYS;
+}
+
 static void irt_exit(int status) {
   _exit(status);
 }
@@ -75,7 +79,6 @@ DEFINE_STUB(dup)
 DEFINE_STUB(dup2)
 DEFINE_STUB(read)
 DEFINE_STUB(seek)
-DEFINE_STUB(fstat)
 DEFINE_STUB(getdents)
 struct nacl_irt_fdio irt_fdio = {
   USE_STUB(irt_fdio, close),
@@ -84,7 +87,7 @@ struct nacl_irt_fdio irt_fdio = {
   USE_STUB(irt_fdio, read),
   irt_write,
   USE_STUB(irt_fdio, seek),
-  USE_STUB(irt_fdio, fstat),
+  irt_fstat,
   USE_STUB(irt_fdio, getdents),
 };
 
