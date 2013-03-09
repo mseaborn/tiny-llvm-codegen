@@ -182,7 +182,9 @@ int main(int argc, char **argv) {
   }
 
   std::map<std::string,uintptr_t> globals;
-  translate(module, &globals);
+  CodeGenOptions options;
+  options.trace_logging = true;
+  translate(module, &globals, &options);
 
   struct startup_info info;
   info.cleanup_func = NULL;

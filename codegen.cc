@@ -39,6 +39,10 @@ void dump_range_as_code(char *start, char *end) {
   system("objdump -D -b binary -m i386 tmp_data | grep '^ '");
 }
 
+void runtime_log(const char *msg) {
+  fprintf(stderr, "%s\n", msg);
+}
+
 // TODO: Remove all uses of unhandled_case()!
 void runtime_unhandled(const char *desc) {
   fprintf(stderr, "Runtime fatal error: case not handled: %s\n", desc);
@@ -171,8 +175,11 @@ public:
 
 class CodeBuf : public DataBuffer {
 public:
-  CodeBuf(): DataBuffer(PROT_READ | PROT_WRITE | PROT_EXEC),
-             data_segment(PROT_READ | PROT_WRITE) {
+  CodeBuf(llvm::TargetData *data_layout_arg, CodeGenOptions *options_arg):
+      DataBuffer(PROT_READ | PROT_WRITE | PROT_EXEC),
+      data_segment(PROT_READ | PROT_WRITE),
+      data_layout(data_layout_arg),
+      options(options_arg) {
   }
 
   void put_code(const char *data, size_t size) {
@@ -205,6 +212,17 @@ public:
       return llvm::cast<llvm::Instruction>(inst)->getOperand(0);
     }
     return NULL;
+  }
+
+  void put_log_message(const char *msg) {
+    // pushl $desc
+    put_byte(0x68);
+    put_uint32((uint32_t) strdup(msg));
+    put_direct_call((uintptr_t) runtime_log);
+    // addl $4, %esp
+    put_byte(0x81);
+    put_byte(0xc4);
+    put_uint32(4);
   }
 
   // TODO: Remove all uses of unhandled_case()!
@@ -432,6 +450,7 @@ public:
   int frame_callees_args_size;
 
   llvm::TargetData *data_layout;
+  CodeGenOptions *options;
 
   typedef std::pair<uint32_t*,llvm::BasicBlock*> JumpReloc;
   std::vector<JumpReloc> jump_relocs;
@@ -957,6 +976,9 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
 
 void translate_bb(llvm::BasicBlock *bb, CodeBuf &codebuf) {
   codebuf.make_label(bb);
+  if (codebuf.options->trace_logging)
+    codebuf.put_log_message((std::string("  block: ") +
+                             std::string(bb->getName())).c_str());
   for (llvm::BasicBlock::InstListType::iterator inst = bb->begin();
        inst != bb->end();
        ++inst) {
@@ -1155,6 +1177,10 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
     codebuf.put_byte(0xec);
     codebuf.put_uint32(frame_size);
 
+    if (codebuf.options->trace_logging)
+      codebuf.put_log_message((std::string("func: ") +
+                               std::string(func->getName())).c_str());
+
     for (llvm::Function::iterator bb = func->begin();
          bb != func->end();
          ++bb) {
@@ -1172,11 +1198,10 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
   delete expand_gep;
 }
 
-void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals) {
-  CodeBuf codebuf;
-
+void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals,
+               CodeGenOptions *options) {
   llvm::TargetData data_layout(module);
-  codebuf.data_layout = &data_layout;
+  CodeBuf codebuf(&data_layout, options);
 
   for (llvm::Module::GlobalListType::iterator global = module->global_begin();
        global != module->global_end();

@@ -85,7 +85,8 @@ void test_features() {
   }
 
   std::map<std::string,uintptr_t> globals;
-  translate(module, &globals);
+  CodeGenOptions options;
+  translate(module, &globals, &options);
 
   int (*func)(int arg);
 
@@ -508,7 +509,8 @@ void test_arithmetic() {
   }
 
   std::map<std::string,uintptr_t> globals;
-  translate(module, &globals);
+  CodeGenOptions options;
+  translate(module, &globals, &options);
   struct TestFunc *translated_test_funcs =
     (struct TestFunc *) globals["test_funcs"];
 
