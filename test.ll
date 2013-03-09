@@ -381,6 +381,7 @@ exit:
 declare void @llvm.memcpy.p0i8.p0i8.i32(i8*, i8*, i32, i32, i1)
 declare void @llvm.memmove.p0i8.p0i8.i32(i8*, i8*, i32, i32, i1)
 declare void @llvm.memset.p0i8.i32(i8*, i8, i32, i32, i1)
+declare void @llvm.memset.p0i8.i64(i8*, i8, i64, i32, i1)
 
 define void @test_memcpy(i8* %dest, i8* %src, i32 %size) {
   call void @llvm.memcpy.p0i8.p0i8.i32(i8* %dest, i8* %src, i32 %size,
@@ -396,6 +397,13 @@ define void @test_memmove(i8* %dest, i8* %src, i32 %size) {
 
 define void @test_memset(i8* %dest, i8 %val, i32 %size) {
   call void @llvm.memset.p0i8.i32(i8* %dest, i8 %val, i32 %size,
+                                  i32 1, i1 false)
+  ret void
+}
+
+define void @test_memset_i64_size(i8* %dest, i8 %val, i32 %size) {
+  %size64 = zext i32 %size to i64
+  call void @llvm.memset.p0i8.i64(i8* %dest, i8 %val, i64 %size64,
                                   i32 1, i1 false)
   ret void
 }

@@ -1074,7 +1074,6 @@ void expand_mem_intrinsics(llvm::BasicBlock *bb) {
         arg_types.push_back(sizetype);
         args.push_back(op->getRawDest());
         args.push_back(op->getRawSource());
-        args.push_back(op->getLength());
         if (llvm::isa<llvm::MemCpyInst>(inst)) {
           mem_func = (uintptr_t) memcpy;
         } else if (llvm::isa<llvm::MemMoveInst>(inst)) {
@@ -1089,11 +1088,18 @@ void expand_mem_intrinsics(llvm::BasicBlock *bb) {
         arg_types.push_back(sizetype);
         args.push_back(op->getRawDest());
         args.push_back(op->getValue());
-        args.push_back(op->getLength());
         mem_func = (uintptr_t) memset;
       } else {
         assert(!"Unknown memory intrinsic");
       }
+      // The intrinsics come in variants with i32 and i64 lengths.  We
+      // truncate the i64 down to i32.  We do no checks to see whether
+      // this discards bits!
+      llvm::Value *length = op->getLength();
+      if (length->getType() != sizetype)
+        length = new llvm::TruncInst(op->getLength(), sizetype,
+                                     "length_cast", op);
+      args.push_back(length);
       llvm::Type *mem_func_type =
         llvm::PointerType::get(
             llvm::FunctionType::get(llvm::Type::getVoidTy(module->getContext()),

@@ -500,9 +500,17 @@ void test_features() {
 
   {
     void (*funcp)(char *dest, char val, size_t size);
-    GET_FUNC(funcp, "test_memset");
     char dest[8];
     char comparison[8];
+
+    GET_FUNC(funcp, "test_memset");
+    memset(dest, 0, sizeof(dest));
+    funcp(dest, 99, sizeof(dest));
+    memset(comparison, 99, sizeof(comparison));
+    ASSERT_EQ(memcmp(dest, comparison, sizeof(comparison)), 0);
+
+    GET_FUNC(funcp, "test_memset_i64_size");
+    memset(dest, 0, sizeof(dest));
     funcp(dest, 99, sizeof(dest));
     memset(comparison, 99, sizeof(comparison));
     ASSERT_EQ(memcmp(dest, comparison, sizeof(comparison)), 0);
