@@ -2,6 +2,12 @@
 
 set -eu
 
+# If ccache is available, use it to speed up rebuilds.
+ccache=""
+if which ccache >/dev/null 2>&1; then
+  ccache=ccache
+fi
+
 llvm_config=llvm-config-3.1
 
 # Filter out -O2 to reduce compile time
@@ -15,19 +21,20 @@ cflags="$(
 cflags="$cflags -UNDEBUG -Wall -Werror"
 
 python test_generate_code.py > gen_arithmetic_test.c
-gcc -O1 -m32 -c gen_arithmetic_test.c
-clang -O1 -m32 -c gen_arithmetic_test.c -emit-llvm -o gen_arithmetic_test.ll
+$ccache gcc -O1 -m32 -c gen_arithmetic_test.c
+$ccache clang -O1 -m32 -c gen_arithmetic_test.c -emit-llvm \
+  -o gen_arithmetic_test.ll
 
 python generate_helpers.py --ll-file > gen_runtime_helpers_atomic.ll
 python generate_helpers.py --header-file > gen_runtime_helpers_atomic.h
 clang -O2 -m32 -c gen_runtime_helpers_atomic.ll -o gen_runtime_helpers_atomic.o
 
-g++ -m32 $cflags -c expand_constantexpr.cc
-g++ -m32 $cflags -c expand_getelementptr.cc
-g++ -m32 $cflags -c codegen.cc
-g++ -m32 $cflags -c codegen_test.cc
-g++ -m32 $cflags -c run_program.cc
-g++ -m32 $cflags -c -O2 runtime_helpers.c
+$ccache g++ -m32 $cflags -c expand_constantexpr.cc
+$ccache g++ -m32 $cflags -c expand_getelementptr.cc
+$ccache g++ -m32 $cflags -c codegen.cc
+$ccache g++ -m32 $cflags -c codegen_test.cc
+$ccache g++ -m32 $cflags -c run_program.cc
+$ccache g++ -m32 $cflags -c -O2 runtime_helpers.c
 
 lib="
   expand_constantexpr.o
@@ -47,7 +54,8 @@ g++ -m32 $lib \
   $($llvm_config --ldflags --libs) -ldl \
   -o run_program
 
-clang -m32 -O2 -c -emit-llvm hellow_minimal_irt.c -o hellow_minimal_irt.pexe
+$ccache clang -m32 -O2 -c -emit-llvm hellow_minimal_irt.c \
+  -o hellow_minimal_irt.pexe
 
 ./codegen_test
 
