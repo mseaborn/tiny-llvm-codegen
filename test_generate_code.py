@@ -43,12 +43,11 @@ C_OPERATORS = [
 # TODO: Test comparisons too
 LLVM_OPERATORS = [
   'add', 'sub', 'mul',
-  # TODO: Enable tests for these
-  # 'udiv', 'urem',
-  # 'sdiv', 'srem',
+  'udiv', 'urem',
+  'sdiv', 'srem',
   'and', 'or', 'xor',
   'shl',
-  # 'lshr', 'ashr',
+  'lshr', 'ashr',
   ]
 
 

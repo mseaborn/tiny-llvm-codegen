@@ -617,8 +617,8 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       }
       case llvm::Instruction::SDiv:
       case llvm::Instruction::SRem: {
-        // TODO: This should extend args first, but this needs a test.
-        assert(bits == 32);
+        codebuf.extend_to_i32(REG_EAX, true, bits);
+        codebuf.extend_to_i32(REG_ECX, true, bits);
         // Fill %edx with sign bit of %eax
         codebuf.put_code(TEMPL("\x99")); // cltd (cdq in Intel syntax)
         // %eax = ((%edx << 32) | %eax) / %ecx
@@ -652,15 +652,13 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
         break;
       }
       case llvm::Instruction::LShr: {
-        // TODO: This should extend args first, but this needs a test.
-        assert(bits == 32);
+        codebuf.extend_to_i32(REG_EAX, false, bits);
         codebuf.put_code(TEMPL("\xd3\xe8")); // shr %cl, %eax
         codebuf.spill(REG_EAX, inst);
         break;
       }
       case llvm::Instruction::AShr: {
-        // TODO: This should extend args first, but this needs a test.
-        assert(bits == 32);
+        codebuf.extend_to_i32(REG_EAX, true, bits);
         codebuf.put_code(TEMPL("\xd3\xf8")); // sar %cl, %eax
         codebuf.spill(REG_EAX, inst);
         break;
