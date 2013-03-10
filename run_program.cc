@@ -15,6 +15,13 @@
 static void *g_sysbrk_current;
 static void *g_sysbrk_max;
 
+static int irt_close(int fd) {
+  // Ignore close() for now because newlib closes stdin/stdout/stderr
+  // on exit, which is not very helpful if we want to debug the
+  // runtime at that point.
+  return -ENOSYS;
+}
+
 static int irt_write(int fd, const void *buf, size_t count, size_t *nwrote) {
   int result = write(fd, buf, count);
   if (result < 0)
@@ -90,14 +97,13 @@ struct nacl_irt_basic irt_basic = {
   irt_sysconf,
 };
 
-DEFINE_STUB(close)
 DEFINE_STUB(dup)
 DEFINE_STUB(dup2)
 DEFINE_STUB(read)
 DEFINE_STUB(seek)
 DEFINE_STUB(getdents)
 struct nacl_irt_fdio irt_fdio = {
-  USE_STUB(irt_fdio, close),
+  irt_close,
   USE_STUB(irt_fdio, dup),
   USE_STUB(irt_fdio, dup2),
   USE_STUB(irt_fdio, read),
