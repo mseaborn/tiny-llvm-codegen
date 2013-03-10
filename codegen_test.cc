@@ -228,6 +228,13 @@ void test_features() {
   ASSERT_EQ(func(99), 123);
   ASSERT_EQ(func(98), 456);
 
+  GET_FUNC(func, "test_conditional_with_i1_overflow");
+  ASSERT_EQ(func(0), 0);
+  ASSERT_EQ(func(1), 1);
+  // 0x10 should be truncated to i1 value 0 here.
+  ASSERT_EQ(func(0x10), 0);
+  ASSERT_EQ(func(0x11), 1);
+
   GET_FUNC(func, "test_switch");
   ASSERT_EQ(func(1), 10);
   ASSERT_EQ(func(5), 50);

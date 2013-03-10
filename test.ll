@@ -102,6 +102,15 @@ iffalse:
   ret i32 %ret2
 }
 
+define i32 @test_conditional_with_i1_overflow(i32 %arg) {
+  %cond = trunc i32 %arg to i1
+  br i1 %cond, label %iftrue, label %iffalse
+iftrue:
+  ret i32 1
+iffalse:
+  ret i32 0
+}
+
 define i32 @test_switch(i32 %arg) {
 entry:
   switch i32 %arg, label %default [

@@ -876,7 +876,9 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     if (op->isConditional()) {
       handle_phi_nodes(bb, op->getSuccessor(0), codebuf, REG_EAX);
       codebuf.move_to_reg(REG_EAX, op->getCondition());
-      codebuf.put_code(TEMPL("\x84\xc0")); // testb %eax, %eax
+      // We must test only the bottom bit of %eax, since the other
+      // bits can contain garbage.
+      codebuf.put_code(TEMPL("\xa8\x01")); // testb $1, %al
       codebuf.put_code(TEMPL("\x0f\x85")); // jnz <label> (32-bit)
       codebuf.direct_jump_offset32(op->getSuccessor(0));
       unconditional_jump(bb, op->getSuccessor(1), codebuf);
