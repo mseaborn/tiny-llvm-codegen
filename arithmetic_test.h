@@ -7,6 +7,7 @@ struct TestFunc {
   void (*func)(void *arg1, void *arg2, void *result);
 };
 
-extern struct TestFunc test_funcs[];
+extern struct TestFunc test_funcs_c[];
+extern struct TestFunc test_funcs_ll[];
 
 #endif

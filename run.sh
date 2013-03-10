@@ -20,10 +20,13 @@ cflags="$(
   done)"
 cflags="$cflags -UNDEBUG -Wall -Werror"
 
-python test_generate_code.py > gen_arithmetic_test.c
-$ccache gcc -O1 -m32 -c gen_arithmetic_test.c
-$ccache clang -O1 -m32 -c gen_arithmetic_test.c -emit-llvm \
-  -o gen_arithmetic_test.ll
+python test_generate_code.py --c-file > gen_arithmetic_test_c.c
+$ccache gcc -O1 -m32 -c gen_arithmetic_test_c.c
+$ccache clang -O1 -m32 -c gen_arithmetic_test_c.c -emit-llvm \
+  -o gen_arithmetic_test_c.ll
+
+python test_generate_code.py --ll-file > gen_arithmetic_test_ll.ll
+$ccache clang -O1 -m32 -c gen_arithmetic_test_ll.ll
 
 python generate_helpers.py --ll-file > gen_runtime_helpers_atomic.ll
 python generate_helpers.py --header-file > gen_runtime_helpers_atomic.h
@@ -45,7 +48,8 @@ lib="
 
 g++ -m32 $lib \
   codegen_test.o \
-  gen_arithmetic_test.o \
+  gen_arithmetic_test_c.o \
+  gen_arithmetic_test_ll.o \
   $($llvm_config --ldflags --libs) -ldl \
   -o codegen_test
 

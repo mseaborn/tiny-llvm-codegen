@@ -551,10 +551,10 @@ void test_features() {
 
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
 
-void test_arithmetic() {
+void test_arithmetic(const char *filename, struct TestFunc *test_funcs,
+                     const char *test_funcs_name) {
   llvm::SMDiagnostic err;
   llvm::LLVMContext &context = llvm::getGlobalContext();
-  const char *filename = "gen_arithmetic_test.ll";
   llvm::Module *module = llvm::ParseIRFile(filename, err, context);
   if (!module) {
     fprintf(stderr, "failed to read file: %s\n", filename);
@@ -565,7 +565,7 @@ void test_arithmetic() {
   CodeGenOptions options;
   translate(module, &globals, &options);
   struct TestFunc *translated_test_funcs =
-    (struct TestFunc *) globals["test_funcs"];
+    (struct TestFunc *) globals[test_funcs_name];
 
   for (int i = 0; test_funcs[i].name != NULL; ++i) {
     printf("test %s\n", test_funcs[i].name);
@@ -600,7 +600,8 @@ int main() {
   setvbuf(stdout, NULL, _IONBF, 0);
 
   test_features();
-  test_arithmetic();
+  test_arithmetic("gen_arithmetic_test_c.ll", test_funcs_c, "test_funcs_c");
+  test_arithmetic("gen_arithmetic_test_ll.ll", test_funcs_ll, "test_funcs_ll");
 
   printf("OK\n");
   return 0;
