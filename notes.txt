@@ -1,0 +1,21 @@
+
+Codegen supports the following integer types:
+
+i32: The most basic type.  This gets a stack slot of 4 bytes.
+
+i16, i8, i1:
+
+   For simplicity of implementation, these are allocated stack slots
+   of 4 bytes as well.
+
+   These stack slots are not necessarily zero-extended, so the upper
+   bits can contain garbage.  We don't use x86's 16-bit or 8-bit
+   arithmetic instructions (addw, addb, etc.), so multiplying 0x80*2
+   as i8 will overflow and be stored as 0x100.  Operations for which
+   this matters (e.g. division) must zero-extend their inputs first.
+
+   There is one exception: BranchInst assumes that its i1 input is
+   zero-extended.  This needs to be fixed so that we can support i1
+   arithmetic.
+
+i64: This gets a stack slot of 8 bytes.
