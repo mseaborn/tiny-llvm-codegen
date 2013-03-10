@@ -31,6 +31,23 @@ static void irt_exit(int status) {
   _exit(status);
 }
 
+enum {
+  NACL_ABI__SC_SENDMSG_MAX_SIZE,
+  NACL_ABI__SC_NPROCESSORS_ONLN,
+  NACL_ABI__SC_PAGESIZE,
+  NACL_ABI__SC_LAST
+};
+
+static int irt_sysconf(int name, int *value) {
+  switch (name) {
+    case NACL_ABI__SC_PAGESIZE:
+      *value = 0x10000;
+      return 0;
+    default:
+      return -EINVAL;
+  }
+}
+
 static int irt_sysbrk(void **brk) {
   if (!g_sysbrk_current) {
     // The brk area is inherently limited, so having a cap here is
@@ -64,14 +81,13 @@ DEFINE_STUB(gettod)
 DEFINE_STUB(clock)
 DEFINE_STUB(nanosleep)
 DEFINE_STUB(sched_yield)
-DEFINE_STUB(sysconf)
 struct nacl_irt_basic irt_basic = {
   irt_exit,
   USE_STUB(irt_basic, gettod),
   USE_STUB(irt_basic, clock),
   USE_STUB(irt_basic, nanosleep),
   USE_STUB(irt_basic, sched_yield),
-  USE_STUB(irt_basic, sysconf),
+  irt_sysconf,
 };
 
 DEFINE_STUB(close)
