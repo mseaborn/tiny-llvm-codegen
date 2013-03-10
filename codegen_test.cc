@@ -531,7 +531,22 @@ void test_features() {
     ASSERT_EQ((uintptr_t) funcp(), 0x12345);
   }
 
-  // TODO: Cover test_atomicrmw_xchg
+  {
+    uint32_t (*funcp)(uint32_t *ptr, uint32_t val);
+    GET_FUNC(funcp, "test_atomicrmw_i32_xchg");
+    uint32_t loc = 123;
+    uint32_t result = funcp(&loc, 456);
+    ASSERT_EQ(result, 123);
+    ASSERT_EQ(loc, 456);
+  }
+  {
+    uint32_t (*funcp)(uint32_t *ptr, uint32_t val);
+    GET_FUNC(funcp, "test_atomicrmw_i32_add");
+    uint32_t loc = 100;
+    uint32_t result = funcp(&loc, 20);
+    ASSERT_EQ(result, 100);
+    ASSERT_EQ(loc, 120);
+  }
 }
 
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))

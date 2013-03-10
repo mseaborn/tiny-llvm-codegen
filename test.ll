@@ -437,7 +437,11 @@ define void @test_unreachable() {
   unreachable
 }
 
-define i32 @test_atomicrmw_xchg(i32* %ptr, i32 %val) {
+define i32 @test_atomicrmw_i32_xchg(i32* %ptr, i32 %val) {
   %1 = atomicrmw xchg i32* %ptr, i32 %val seq_cst
+  ret i32 %1
+}
+define i32 @test_atomicrmw_i32_add(i32* %ptr, i32 %val) {
+  %1 = atomicrmw add i32* %ptr, i32 %val seq_cst
   ret i32 %1
 }

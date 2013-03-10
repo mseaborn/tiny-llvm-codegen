@@ -19,6 +19,7 @@
 
 #include "expand_constantexpr.h"
 #include "expand_getelementptr.h"
+#include "gen_runtime_helpers_atomic.h"
 #include "runtime_helpers.h"
 
 #define TEMPL(string) string, (sizeof(string) - 1)
@@ -801,6 +802,39 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
       codebuf.put_sized_opcode(op->getValueOperand()->getType(), 0x88);
       codebuf.put_byte(0x02);
     }
+  } else if (llvm::AtomicRMWInst *op =
+             llvm::dyn_cast<llvm::AtomicRMWInst>(inst)) {
+    llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
+    if (inttype->getBitWidth() != 32) {
+      codebuf.unhandled_case("AtomicRMWInst on non-i32");
+      return;
+    }
+    // XXX: We assume seq_cst (SequentiallyConsistent).
+    // We also assume a SynchronizationScope of CrossThread.
+    uintptr_t func;
+    switch (op->getOperation()) {
+#define MAP(OP) case llvm::AtomicRMWInst::OP: \
+                  func = (uintptr_t) runtime_atomicrmw_i32_##OP; break;
+      MAP(Xchg)
+      MAP(Add)
+      MAP(Sub)
+      MAP(And)
+      MAP(Nand)
+      MAP(Or)
+      MAP(Xor)
+      MAP(Max)
+      MAP(Min)
+      MAP(UMax)
+      MAP(UMin)
+#undef MAP
+      default:
+        assert(!"Unknown comparison");
+    }
+    // Generate function call to helper function.
+    codebuf.move_to_reg(REG_EAX, op->getPointerOperand());
+    codebuf.move_to_reg(REG_EDX, op->getValOperand());
+    codebuf.put_direct_call(func);
+    codebuf.spill(REG_EAX, inst);
   } else if (llvm::ReturnInst *op
              = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
     if (llvm::Value *result = op->getReturnValue()) {
