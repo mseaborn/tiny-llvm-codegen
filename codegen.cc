@@ -69,7 +69,6 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
     *result_global = global;
     *result_offset = 0;
   } else if (llvm::ConstantInt *cval = llvm::dyn_cast<llvm::ConstantInt>(val)) {
-    assert(cval->getBitWidth() % 8 == 0);
     *result_global = NULL;
     *result_offset = cval->getZExtValue();
     // Check for possible truncation.

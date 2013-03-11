@@ -100,6 +100,12 @@ void test_features() {
   }
 
   {
+    uint8_t (*funcp)();
+    GET_FUNC(funcp, "test_return_i1");
+    ASSERT_EQ(funcp(), 1);
+  }
+
+  {
     uint32_t (*funcp)();
     GET_FUNC(funcp, "test_return_undef");
     // Just check that the function is callable.
