@@ -532,10 +532,19 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     llvm::IntegerType *inttype = llvm::cast<llvm::IntegerType>(op->getType());
     int bits = inttype->getBitWidth();
     if (bits < 8) {
-      codebuf.unhandled_case("Arithmetic on i1");
-      return;
+      assert(bits == 1);
+      switch (op->getOpcode()) {
+        case llvm::Instruction::And:
+        case llvm::Instruction::Or:
+        case llvm::Instruction::Xor:
+          break;
+        default:
+          // Non-logic operations are awkward to test and are of
+          // dubious usefulness.  e.g. Shifting a 1-bit value by 1
+          // gives undefined behaviour.
+          assert(!"Only logic operations are supported on i1");
+      }
     }
-    assert(bits >= 8); // Disallow i1
     if (bits == 64) {
       // Generate function call to helper function.
       int arg_size = 4;

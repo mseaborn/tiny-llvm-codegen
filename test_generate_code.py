@@ -93,10 +93,16 @@ def generate_ll():
   print 'target triple = "i386-pc-linux-gnu"\n'
   print 'target datalayout = "p:32:32:32"'
   func_names = []
-  # TODO: Test i64 and i1 too.  Testing i64 requires omitting the
-  # trunc/zext operations below.
-  for int_size in (32, 16, 8):
+  # TODO: Test i64 too.  Testing i64 requires omitting the trunc/zext
+  # operations below.
+  for int_size in (32, 16, 8, 1):
     for op_name in LLVM_OPERATORS:
+      if int_size == 1 and op_name not in ('and', 'or', 'xor'):
+        # Operations other than logic operations on i1 are somewhat
+        # dubious.  They are hard to test because of the high
+        # likelihood of generating undefined behaviour (for bit
+        # shifting) or division-by-zero.
+        continue
       ty = 'i%i' % int_size
       func_name = 'func_%s_%s' % (op_name, ty)
       print '@name_%s = constant [%i x i8] c"%s\\00"' % (
