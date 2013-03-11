@@ -509,10 +509,14 @@ void handle_phi_nodes(llvm::BasicBlock *from_bb,
     llvm::PHINode *phi = llvm::dyn_cast<llvm::PHINode>(inst);
     if (!phi)
       break;
+    llvm::Value *incoming = phi->getIncomingValueForBlock(from_bb);
     if (is_i64(phi->getType())) {
-      codebuf.unhandled_case("i64 in PHINode");
+      codebuf.move_part_to_reg(tmp_reg, incoming, 0);
+      codebuf.spill_part(tmp_reg, phi, 0);
+      codebuf.move_part_to_reg(tmp_reg, incoming, 4);
+      codebuf.spill_part(tmp_reg, phi, 4);
     } else {
-      codebuf.move_to_reg(tmp_reg, phi->getIncomingValueForBlock(from_bb));
+      codebuf.move_to_reg(tmp_reg, incoming);
       codebuf.spill(tmp_reg, phi);
     }
   }

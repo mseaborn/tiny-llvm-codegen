@@ -250,6 +250,13 @@ void test_features() {
   ASSERT_EQ(func(99), 123);
   ASSERT_EQ(func(98), 456);
 
+  {
+    uint64_t (*funcp)(uint64_t arg);
+    GET_FUNC(funcp, "test_phi_i64");
+    ASSERT_EQ(funcp(99), 123);
+    ASSERT_EQ(funcp(98), 456);
+  }
+
   GET_FUNC(func, "test_select");
   ASSERT_EQ(func(99), 123);
   ASSERT_EQ(func(98), 456);
