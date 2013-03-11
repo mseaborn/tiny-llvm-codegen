@@ -335,11 +335,19 @@ public:
     put_uint32(stack_offset);
   }
 
+  // Generate code to write |reg| to the 32-bit portion of the stack
+  // slot for |inst| at |offset_in_value|.  This is the reverse of
+  // move_part_to_reg().
+  void spill_part(int reg, llvm::Instruction *inst, int offset_in_value) {
+    check_offset_in_value(inst->getType(), offset_in_value);
+    write_reg_to_ebp_offset(reg, stackslots[inst] + offset_in_value);
+  }
+
   // Generate code to write |reg| to the stack slot for |inst|.  This
   // is the reverse of move_to_reg().
   void spill(int reg, llvm::Instruction *inst) {
     assert(!is_i64(inst->getType()));
-    write_reg_to_ebp_offset(reg, stackslots[inst]);
+    spill_part(reg, inst, 0);
   }
 
   void put_direct_call(uintptr_t func_addr) {
@@ -1000,9 +1008,8 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     codebuf.move_to_reg(REG_EAX, op->getCalledValue());
     codebuf.put_code(TEMPL("\xff\xd0")); // call *%eax
     if (is_i64(op->getType())) {
-      codebuf.addr_to_reg(REG_ECX, op);
-      codebuf.put_code(TEMPL("\x89\x01")); // movl %eax, (%ecx)
-      codebuf.put_code(TEMPL("\x89\x51\x04")); // movl %edx, 4(%ecx)
+      codebuf.spill_part(REG_EAX, op, 0);
+      codebuf.spill_part(REG_EDX, op, 4);
     } else {
       codebuf.spill(REG_EAX, op);
     }
