@@ -235,9 +235,18 @@ public:
     put_direct_call((uintptr_t) runtime_unhandled);
   }
 
-  // Generate code to put |value| into |reg|.
-  void move_to_reg(int reg, llvm::Value *value) {
-    assert(!is_i64(value->getType()));
+  void check_offset_in_value(llvm::Type *ty, int offset) {
+    if (is_i64(ty)) {
+      assert(offset == 0 || offset == 4);
+    } else {
+      assert(offset == 0);
+    }
+  }
+
+  // Generate code to put the 32-bit portion of |value| at
+  // |offset_in_value| into |reg|.
+  void move_part_to_reg(int reg, llvm::Value *value, int offset_in_value) {
+    check_offset_in_value(value->getType(), offset_in_value);
     while (llvm::Value *alias = get_aliased_value(value))
       value = alias;
     if (llvm::Constant *cval = llvm::dyn_cast<llvm::Constant>(value)) {
@@ -249,7 +258,10 @@ public:
         unhandled_case(unhandled);
         return;
       }
-      assert((uint32_t) offset == offset); // Sanity check.
+      if (offset_in_value == 4) {
+        assert(!global); // Sanity check: globals are not 64-bit.
+        offset >>= 32;
+      }
       // movl $INT32, %reg
       put_byte(0xb8 | reg);
       if (global) {
@@ -260,7 +272,7 @@ public:
     } else if (llvm::isa<llvm::Instruction>(value) ||
                llvm::isa<llvm::Argument>(value)) {
       assert(stackslots.count(value) == 1);
-      int ebp_offset = stackslots[value];
+      int ebp_offset = stackslots[value] + offset_in_value;
       // movl ebp_offset(%ebp), %reg
       put_byte(0x8b);
       put_byte(0x85 | (reg << 3));
@@ -268,6 +280,12 @@ public:
     } else {
       assert(!"Unknown value type");
     }
+  }
+
+  // Generate code to put |value| into |reg|.
+  void move_to_reg(int reg, llvm::Value *value) {
+    assert(!is_i64(value->getType()));
+    move_part_to_reg(reg, value, 0);
   }
 
   // Generate code to put the address of |value| into |reg|.
@@ -317,6 +335,8 @@ public:
     put_uint32(stack_offset);
   }
 
+  // Generate code to write |reg| to the stack slot for |inst|.  This
+  // is the reverse of move_to_reg().
   void spill(int reg, llvm::Instruction *inst) {
     assert(!is_i64(inst->getType()));
     write_reg_to_ebp_offset(reg, stackslots[inst]);
@@ -845,9 +865,8 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
              = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
     if (llvm::Value *result = op->getReturnValue()) {
       if (is_i64(result->getType())) {
-        codebuf.addr_to_reg(REG_EAX, result);
-        codebuf.put_code(TEMPL("\x8b\x50\x04")); // movl 4(%eax), %edx
-        codebuf.put_code(TEMPL("\x8b\x00")); // movl (%eax), %eax
+        codebuf.move_part_to_reg(REG_EAX, result, 0);
+        codebuf.move_part_to_reg(REG_EDX, result, 4);
       } else {
         codebuf.move_to_reg(REG_EAX, result);
       }
