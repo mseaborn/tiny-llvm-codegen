@@ -149,6 +149,10 @@ static bool ExpandVarArgCall(CallInst *Call) {
   Instruction *Buf = new AllocaInst(VarArgsTy, "vararg_buffer");
   Func->getEntryBlock().getInstList().push_front(Buf);
 
+  // TODO: Add calls to llvm.lifetime.start/end intrinsics to declare
+  // that Buf is only used for the duration of the function call, so
+  // that the stack space can be reused.
+
   // Copy variable arguments into buffer.
   int Index = 0;
   for (std::vector<Value*>::iterator Iter = VarArgs.begin();
