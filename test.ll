@@ -458,3 +458,34 @@ define i32 @test_atomicrmw_i32_add(i32* %ptr, i32 %val) {
   %1 = atomicrmw add i32* %ptr, i32 %val seq_cst
   ret i32 %1
 }
+
+
+declare void @llvm.va_start(i8*)
+declare void @llvm.va_end(i8*)
+
+; PNaCl's va_list is currently 16 bytes.
+%va_list = type [4 x i32]
+
+define i32 @varargs_func(i32 %arg, i32* %res1, i64* %res2, i32* %res3, ...) {
+  %arglist_alloc = alloca %va_list
+  %arglist = bitcast %va_list* %arglist_alloc to i8*
+  call void @llvm.va_start(i8* %arglist)
+
+  %val1 = va_arg i8* %arglist, i32
+  store i32 %val1, i32* %res1
+  %val2 = va_arg i8* %arglist, i64
+  store i64 %val2, i64* %res2
+  %val3 = va_arg i8* %arglist, i32
+  store i32 %val3, i32* %res3
+
+  call void @llvm.va_end(i8* %arglist)
+  ret i32 %arg
+}
+
+define i32 @test_varargs_call(i32* %res1, i64* %res2, i32* %res3) {
+  %result = call i32 (i32, i32*, i64*, i32*, ...)*
+      @varargs_func(i32 1234,
+                    i32* %res1, i64* %res2, i32* %res3,
+                    i32 111, i64 222, i32 333)
+  ret i32 %result
+}

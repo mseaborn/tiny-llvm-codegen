@@ -34,6 +34,7 @@ clang -O2 -m32 -c gen_runtime_helpers_atomic.ll -o gen_runtime_helpers_atomic.o
 
 $ccache g++ -m32 $cflags -c expand_constantexpr.cc
 $ccache g++ -m32 $cflags -c expand_getelementptr.cc
+$ccache g++ -m32 $cflags -c expand_varargs.cc
 $ccache g++ -m32 $cflags -c codegen.cc
 $ccache g++ -m32 $cflags -c codegen_test.cc
 $ccache g++ -m32 $cflags -c run_program.cc
@@ -42,6 +43,7 @@ $ccache g++ -m32 $cflags -c -O2 runtime_helpers.c
 lib="
   expand_constantexpr.o
   expand_getelementptr.o
+  expand_varargs.o
   codegen.o
   gen_runtime_helpers_atomic.o
   runtime_helpers.o"

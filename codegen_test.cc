@@ -567,6 +567,20 @@ void test_features() {
     ASSERT_EQ(result, 100);
     ASSERT_EQ(loc, 120);
   }
+
+  {
+    uint32_t (*funcp)(uint32_t *result1,
+                      uint64_t *result2,
+                      uint32_t *result3);
+    GET_FUNC(funcp, "test_varargs_call");
+    uint32_t result1;
+    uint64_t result2;
+    uint32_t result3;
+    ASSERT_EQ(funcp(&result1, &result2, &result3), 1234);
+    ASSERT_EQ(result1, 111);
+    ASSERT_EQ(result2, 222);
+    ASSERT_EQ(result3, 333);
+  }
 }
 
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))

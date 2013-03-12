@@ -19,6 +19,7 @@
 
 #include "expand_constantexpr.h"
 #include "expand_getelementptr.h"
+#include "expand_varargs.h"
 #include "gen_runtime_helpers_atomic.h"
 #include "runtime_helpers.h"
 
@@ -1283,6 +1284,10 @@ void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals,
                CodeGenOptions *options) {
   llvm::TargetData data_layout(module);
   CodeBuf codebuf(&data_layout, options);
+
+  llvm::ModulePass *expand_varargs = createExpandVarArgsPass();
+  expand_varargs->runOnModule(*module);
+  delete expand_varargs;
 
   for (llvm::Module::GlobalListType::iterator global = module->global_begin();
        global != module->global_end();
