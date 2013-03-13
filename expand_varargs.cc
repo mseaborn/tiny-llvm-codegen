@@ -118,6 +118,10 @@ static bool ExpandVarArgCall(CallInst *Call) {
       Call->getCalledValue()->getType()->getPointerElementType());
   if (!FuncType->isFunctionVarArg())
     return false;
+  // If there are no variable arguments being passed, nothing needs to
+  // be changed.  Also, StructType::create() rejects empty lists.
+  if (FuncType->getNumParams() == Call->getNumArgOperands())
+    return false;
 
   LLVMContext *Context =
     &Call->getParent()->getParent()->getParent()->getContext();

@@ -489,3 +489,12 @@ define i32 @test_varargs_call(i32* %res1, i64* %res2, i32* %res3) {
                     i32 111, i64 222, i32 333)
   ret i32 %result
 }
+
+define i32 @varargs_func_trivial(i32 %arg, ...) {
+  ret i32 %arg
+}
+
+define i32 @test_varargs_call_empty() {
+  %result = call i32 (i32, ...)* @varargs_func_trivial(i32 2345)
+  ret i32 %result
+}
