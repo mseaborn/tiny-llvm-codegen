@@ -74,11 +74,11 @@ void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
     *result_offset = cval->getZExtValue();
     // Check for possible truncation.
     assert(*result_offset == cval->getZExtValue());
-  } else if (llvm::isa<llvm::ConstantFP>(val)) {
-    // TODO: Handle ConstantFP.
-    *result_unhandled = "ConstantFP";
+  } else if (llvm::ConstantFP *cval = llvm::dyn_cast<llvm::ConstantFP>(val)) {
+    llvm::APInt data = cval->getValueAPF().bitcastToAPInt();
+    assert(data.getBitWidth() == 64);
     *result_global = NULL;
-    *result_offset = 0;
+    *result_offset = data.getZExtValue();
   } else if (llvm::isa<llvm::ConstantPointerNull>(val)) {
     *result_global = NULL;
     *result_offset = 0;
@@ -877,7 +877,11 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
   } else if (llvm::ReturnInst *op
              = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
     if (llvm::Value *result = op->getReturnValue()) {
-      if (is_i64(result->getType())) {
+      if (result->getType()->isDoubleTy()) {
+        codebuf.addr_to_reg(REG_EAX, result);
+        // fldl (%eax)
+        codebuf.put_code(TEMPL("\xdd\x00"));
+      } else if (is_i64(result->getType())) {
         codebuf.move_part_to_reg(REG_EAX, result, 0);
         codebuf.move_part_to_reg(REG_EDX, result, 4);
       } else {

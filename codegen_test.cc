@@ -106,6 +106,12 @@ void test_features() {
   }
 
   {
+    double (*funcp)();
+    GET_FUNC(funcp, "test_return_double");
+    assert(funcp() == 123.456);
+  }
+
+  {
     uint32_t (*funcp)();
     GET_FUNC(funcp, "test_return_undef");
     // Just check that the function is callable.
