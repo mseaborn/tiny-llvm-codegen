@@ -981,13 +981,12 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     }
   } else if (llvm::IntrinsicInst *op =
              llvm::dyn_cast<llvm::IntrinsicInst>(inst)) {
-    std::string name = op->getCalledValue()->getName();
-    if (name == "llvm.lifetime.start" ||
-        name == "llvm.lifetime.end") {
+    if (op->getIntrinsicID() == llvm::Intrinsic::lifetime_start ||
+        op->getIntrinsicID() == llvm::Intrinsic::lifetime_end) {
       // Ignore.
     } else {
       std::string desc = "IntrinsicInst: ";
-      desc += name;
+      desc += op->getCalledValue()->getName();
       codebuf.unhandled_case(desc.c_str());
     }
   } else if (llvm::CallInst *op = llvm::dyn_cast<llvm::CallInst>(inst)) {
