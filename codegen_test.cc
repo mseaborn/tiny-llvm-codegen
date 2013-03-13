@@ -585,6 +585,9 @@ void test_features() {
     uint32_t (*funcp)();
     GET_FUNC(funcp, "test_varargs_call_empty");
     ASSERT_EQ(funcp(), 2345);
+
+    GET_FUNC(funcp, "test_varargs_va_copy");
+    ASSERT_EQ(funcp(), 5678);
   }
 }
 

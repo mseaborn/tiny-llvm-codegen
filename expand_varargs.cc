@@ -75,8 +75,6 @@ static void ExpandVarArgFunc(Function *Func) {
                                         "arglist", II);
           new StoreInst(VarArgsArg, Cast, II);
           II->eraseFromParent();
-        } else if (II->getIntrinsicID() == Intrinsic::vaend) {
-          II->eraseFromParent();
         }
       }
     }
@@ -203,6 +201,23 @@ bool ExpandVarArgs::runOnModule(Module &M) {
         if (VAArgInst *VI = dyn_cast<VAArgInst>(Inst)) {
           Changed = true;
           ExpandVAArgInst(VI, &DataLayout);
+        } else if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(Inst)) {
+          if (II->getIntrinsicID() == Intrinsic::vaend) {
+            // va_end() is a no-op.
+            II->eraseFromParent();
+          } else if (II->getIntrinsicID() == Intrinsic::vacopy) {
+            // va_list may have more space reserved, but we only need
+            // to copy a single pointer.
+            Type *I8 = Type::getInt8Ty(M.getContext());
+            Type *PtrTy = I8->getPointerTo()->getPointerTo();
+            Value *Src = new BitCastInst(II->getArgOperand(1), PtrTy,
+                                         "vacopy_src", II);
+            Value *Dest = new BitCastInst(II->getArgOperand(0), PtrTy,
+                                          "vacopy_dest", II);
+            Value *CurrentPtr = new LoadInst(Src, "vacopy_currentptr", II);
+            new StoreInst(CurrentPtr, Dest, II);
+            II->eraseFromParent();
+          }
         } else if (CallInst *Call = dyn_cast<CallInst>(Inst)) {
           Changed |= ExpandVarArgCall(Call);
         }
