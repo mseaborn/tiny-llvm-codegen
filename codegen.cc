@@ -985,8 +985,13 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
     }
   } else if (llvm::IntrinsicInst *op =
              llvm::dyn_cast<llvm::IntrinsicInst>(inst)) {
-    if (op->getIntrinsicID() == llvm::Intrinsic::lifetime_start ||
-        op->getIntrinsicID() == llvm::Intrinsic::lifetime_end) {
+    llvm::Intrinsic::ID id = op->getIntrinsicID();
+    // TODO: llvm.dbg.value and llvm.dbg.declare should be stripped
+    // out in the wire format, and we should disallow use of these.
+    if (id == llvm::Intrinsic::lifetime_start ||
+        id == llvm::Intrinsic::lifetime_end ||
+        id == llvm::Intrinsic::dbg_value ||
+        id == llvm::Intrinsic::dbg_declare) {
       // Ignore.
     } else {
       std::string desc = "IntrinsicInst: ";

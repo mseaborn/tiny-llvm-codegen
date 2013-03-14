@@ -595,6 +595,13 @@ void test_features() {
     GET_FUNC(funcp, "test_varargs_va_copy");
     ASSERT_EQ(funcp(), 5678);
   }
+
+  {
+    void (*funcp)(int arg);
+    GET_FUNC(funcp, "test_debug_info_intrinsics");
+    // Just check that the function is callable.
+    funcp(0);
+  }
 }
 
 #define ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))

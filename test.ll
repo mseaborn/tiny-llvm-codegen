@@ -522,3 +522,15 @@ define i32 @test_varargs_va_copy() {
   %result = call i32 (i32, ...)* @va_copy_func(i32 63, i32 5678)
   ret i32 %result
 }
+
+
+; These are no-op intrinsics for our code generator.
+declare void @llvm.dbg.value(metadata, i64, metadata)
+declare void @llvm.dbg.declare(metadata, metadata)
+
+define void @test_debug_info_intrinsics(i32 %arg) {
+  call void @llvm.dbg.value(metadata !{i32 %arg}, i64 0, metadata !{})
+  %localvar = alloca i32
+  call void @llvm.dbg.declare(metadata !{i32* %localvar}, metadata !{})
+  ret void
+}
