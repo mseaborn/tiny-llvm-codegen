@@ -1,3 +1,11 @@
+//===- run_program.cc - Tool for running a PNaCl pexe----------------------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
 
 #include <assert.h>
 #include <stdio.h>

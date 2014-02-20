@@ -1,3 +1,11 @@
+//===- runtime_helpers.c - Runtime functions for use by generated code-----===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
 
 #include "runtime_helpers.h"
 
