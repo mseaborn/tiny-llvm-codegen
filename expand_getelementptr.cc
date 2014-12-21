@@ -9,16 +9,14 @@
 
 #include "expand_getelementptr.h"
 
-#include <llvm/BasicBlock.h>
-#include <llvm/Constants.h>
-#include <llvm/Function.h>
-#include <llvm/InstrTypes.h>
-#include <llvm/Instructions.h>
-#include <llvm/Module.h>
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
-
-// In LLVM 3.2, this becomes <llvm/DataLayout.h>
-#include <llvm/Target/TargetData.h>
+#include <llvm/IR/DataLayout.h>
 
 using namespace llvm;
 
@@ -39,7 +37,7 @@ bool ExpandGetElementPtr::runOnBasicBlock(BasicBlock &bb) {
   bool modified = false;
   Module *module = bb.getParent()->getParent();
   Type *ptrtype = Type::getInt32Ty(module->getContext());
-  TargetData data_layout(module);
+  DataLayout data_layout(module);
 
   for (BasicBlock::InstListType::iterator iter = bb.begin();
        iter != bb.end(); ) {

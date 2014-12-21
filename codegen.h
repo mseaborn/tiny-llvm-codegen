@@ -12,7 +12,7 @@
 
 #include <map>
 
-#include <llvm/Module.h>
+#include <llvm/IR/Module.h>
 
 class CodeGenOptions {
 public:

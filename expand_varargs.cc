@@ -9,17 +9,15 @@
 
 #include "expand_varargs.h"
 
-#include <llvm/BasicBlock.h>
-#include <llvm/Constants.h>
-#include <llvm/Function.h>
-#include <llvm/InstrTypes.h>
-#include <llvm/Instructions.h>
-#include <llvm/IntrinsicInst.h>
-#include <llvm/Module.h>
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
-
-// In LLVM 3.2, this becomes <llvm/DataLayout.h>
-#include <llvm/Target/TargetData.h>
+#include <llvm/IR/DataLayout.h>
 
 using namespace llvm;
 
@@ -91,7 +89,7 @@ static void ExpandVarArgFunc(Function *Func) {
   // TODO: Update debug information too.
 }
 
-static void ExpandVAArgInst(VAArgInst *Inst, TargetData *DataLayout) {
+static void ExpandVAArgInst(VAArgInst *Inst, DataLayout *DataLayout) {
   Module *Module = Inst->getParent()->getParent()->getParent();
   Type *I8 = Type::getInt8Ty(Module->getContext());
   Type *I32 = Type::getInt32Ty(Module->getContext());
@@ -195,7 +193,7 @@ static bool ExpandVarArgCall(CallInst *Call) {
 
 bool ExpandVarArgs::runOnModule(Module &M) {
   bool Changed = false;
-  TargetData DataLayout(&M);
+  DataLayout DataLayout(&M);
 
   for (Module::iterator Iter = M.begin(), E = M.end(); Iter != E; ) {
     Function *Func = Iter++;
