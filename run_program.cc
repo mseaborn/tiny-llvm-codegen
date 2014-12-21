@@ -11,8 +11,9 @@
 #include <stdio.h>
 #include <sys/mman.h>
 
-#include <llvm/LLVMContext.h>
-#include <llvm/Support/IRReader.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IRReader/IRReader.h>
+#include <llvm/Support/SourceMgr.h>
 
 #include "codegen.h"
 #include "nacl_irt_interfaces.h"

@@ -9,13 +9,13 @@
 
 #include "expand_constantexpr.h"
 
-#include <llvm/BasicBlock.h>
-#include <llvm/Constants.h>
-#include <llvm/Function.h>
-#include <llvm/InstrTypes.h>
-#include <llvm/Instructions.h>
-#include <llvm/Module.h>
-#include <llvm/Operator.h>
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Operator.h>
 #include <llvm/Pass.h>
 
 using namespace llvm;

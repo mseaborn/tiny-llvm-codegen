@@ -15,15 +15,13 @@
 
 #include <map>
 
-#include <llvm/Analysis/Verifier.h>
-#include <llvm/Constants.h>
-#include <llvm/InstrTypes.h>
-#include <llvm/Instructions.h>
-#include <llvm/IntrinsicInst.h>
-#include <llvm/Module.h>
-
-// In LLVM 3.2, this becomes <llvm/DataLayout.h>
-#include <llvm/Target/TargetData.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/DataLayout.h>
 
 #include "expand_constantexpr.h"
 #include "expand_getelementptr.h"
@@ -70,7 +68,7 @@ bool is_i64(llvm::Type *ty) {
   return false;
 }
 
-void expand_constant(llvm::Constant *val, llvm::TargetData *data_layout,
+void expand_constant(llvm::Constant *val, llvm::DataLayout *data_layout,
                      llvm::GlobalValue **result_global,
                      uint64_t *result_offset,
                      const char **result_unhandled) {
@@ -181,11 +179,12 @@ public:
   void put_uint32(uint32_t val) {
     *(uint32_t *) put_alloc_space(sizeof(val)) = val;
   }
+
 };
 
 class CodeBuf : public DataBuffer {
 public:
-  CodeBuf(llvm::TargetData *data_layout_arg, CodeGenOptions *options_arg):
+  CodeBuf(llvm::DataLayout *data_layout_arg, CodeGenOptions *options_arg):
       DataBuffer(PROT_READ | PROT_WRITE | PROT_EXEC),
       data_segment(PROT_READ | PROT_WRITE),
       data_layout(data_layout_arg),
@@ -487,7 +486,7 @@ public:
   int frame_vars_size;
   int frame_callees_args_size;
 
-  llvm::TargetData *data_layout;
+  llvm::DataLayout *data_layout;
   CodeGenOptions *options;
 
   typedef std::pair<uint32_t*,llvm::BasicBlock*> JumpReloc;
@@ -556,7 +555,7 @@ const char *get_instruction_type(llvm::Instruction *inst) {
   switch (inst->getOpcode()) {
 #define HANDLE_INST(NUM, OPCODE, CLASS) \
     case llvm::Instruction::OPCODE: return #OPCODE;
-#include "llvm/Instruction.def"
+#include <llvm/IR/Instruction.def>
 #undef HANDLE_INST
     default: return "<unknown-instruction>";
   }
@@ -1298,7 +1297,7 @@ void translate_function(llvm::Function *func, CodeBuf &codebuf) {
 
 void translate(llvm::Module *module, std::map<std::string,uintptr_t> *globals,
                CodeGenOptions *options) {
-  llvm::TargetData data_layout(module);
+  llvm::DataLayout data_layout(module);
   CodeBuf codebuf(&data_layout, options);
 
   llvm::ModulePass *expand_varargs = createExpandVarArgsPass();
