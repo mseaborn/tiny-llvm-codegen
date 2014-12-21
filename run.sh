@@ -52,12 +52,12 @@ g++ -m32 $lib \
   codegen_test.o \
   gen_arithmetic_test_c.o \
   gen_arithmetic_test_ll.o \
-  $($llvm_config --ldflags --libs) -ldl \
+  $($llvm_config --ldflags --libs --system-libs) -ldl \
   -o codegen_test
 
 g++ -m32 $lib \
   run_program.o \
-  $($llvm_config --ldflags --libs) -ldl \
+  $($llvm_config --ldflags --libs --system-libs) -ldl \
   -o run_program
 
 $ccache clang -m32 -O2 -c -emit-llvm hellow_minimal_irt.c \
