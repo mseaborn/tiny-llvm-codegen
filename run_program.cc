@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <sys/mman.h>
 
 #include <llvm/LLVMContext.h>
