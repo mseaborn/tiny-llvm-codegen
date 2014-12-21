@@ -8,7 +8,7 @@ if which ccache >/dev/null 2>&1; then
   ccache=ccache
 fi
 
-llvm_config=llvm-config-3.1
+llvm_config=llvm-config-3.5
 
 # Filter out -O2 to reduce compile time
 cflags="$(
