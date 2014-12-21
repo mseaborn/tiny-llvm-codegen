@@ -644,7 +644,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
         // result = %eax * %ecx
         // %eax = (uint32_t) result
         // %edx = (uint32_t) (result >> 32) -- we ignore this
-        char code[2] = { 0xf7, 0xe1 }; // mull %ecx
+        char code[2] = { '\xf7', '\xe1' }; // mull %ecx
         codebuf.put_code(code, sizeof(code));
         codebuf.spill(REG_EAX, inst);
         break;
@@ -655,7 +655,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
         codebuf.extend_to_i32(REG_ECX, false, bits);
         codebuf.put_code(TEMPL("\x31\xd2")); // xorl %edx, %edx
         // %eax = ((%edx << 32) | %eax) / %ecx
-        char code[2] = { 0xf7, 0xf1 }; // divl %ecx
+        char code[2] = { '\xf7', '\xf1' }; // divl %ecx
         codebuf.put_code(code, sizeof(code));
         if (op->getOpcode() == llvm::Instruction::UDiv) {
           codebuf.spill(REG_EAX, inst);
@@ -671,7 +671,7 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
         // Fill %edx with sign bit of %eax
         codebuf.put_code(TEMPL("\x99")); // cltd (cdq in Intel syntax)
         // %eax = ((%edx << 32) | %eax) / %ecx
-        char code[2] = { 0xf7, 0xf9 }; // idivl %ecx
+        char code[2] = { '\xf7', '\xf9' }; // idivl %ecx
         codebuf.put_code(code, sizeof(code));
         if (op->getOpcode() == llvm::Instruction::SDiv) {
           codebuf.spill(REG_EAX, inst);
