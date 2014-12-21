@@ -1001,6 +1001,10 @@ void translate_instruction(llvm::Instruction *inst, CodeBuf &codebuf) {
         id == llvm::Intrinsic::dbg_value ||
         id == llvm::Intrinsic::dbg_declare) {
       // Ignore.
+    } else if (op->getCalledValue()->getName() == "llvm.nacl.read.tp") {
+      uintptr_t func = (uintptr_t) runtime_tls_get;
+      codebuf.put_direct_call(func);
+      codebuf.spill(REG_EAX, inst);
     } else {
       std::string desc = "IntrinsicInst: ";
       desc += op->getCalledValue()->getName();
