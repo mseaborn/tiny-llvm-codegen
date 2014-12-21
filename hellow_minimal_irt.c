@@ -31,7 +31,7 @@ static void __libnacl_mandatory_irt_query(const char *interface,
                                 sizeof(__libnacl_irt_##name))
 
 void _start(uint32_t *info) {
-  Elf32_auxv_t *auxv = nacl_startup_auxv(info);
+  const Elf32_auxv_t *auxv = nacl_startup_auxv(info);
   grok_auxv(auxv);
   DO_QUERY(NACL_IRT_BASIC_v0_1, basic);
   DO_QUERY(NACL_IRT_FDIO_v0_1, fdio);
